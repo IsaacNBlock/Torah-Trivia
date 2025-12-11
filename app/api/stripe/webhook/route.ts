@@ -2,15 +2,34 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createServerClient } from '@/lib/supabase'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-11-20.acacia',
-})
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
 
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
+if (!stripeSecretKey) {
+  console.warn('STRIPE_SECRET_KEY not set - Stripe webhooks will not work')
+}
+
+const stripe = stripeSecretKey ? new Stripe(stripeSecretKey, {
+  apiVersion: '2024-11-20.acacia',
+}) : null
 
 export async function POST(request: NextRequest) {
+  if (!stripe || !webhookSecret) {
+    return NextResponse.json(
+      { error: 'Stripe is not configured' },
+      { status: 500 }
+    )
+  }
+
   const body = await request.text()
-  const signature = request.headers.get('stripe-signature')!
+  const signature = request.headers.get('stripe-signature')
+
+  if (!signature) {
+    return NextResponse.json(
+      { error: 'Missing stripe-signature header' },
+      { status: 400 }
+    )
+  }
 
   let event: Stripe.Event
 
@@ -32,14 +51,21 @@ export async function POST(request: NextRequest) {
         const session = event.data.object as Stripe.Checkout.Session
         const userId = session.metadata?.userId || session.client_reference_id
 
-        if (userId) {
-          await supabase
+        if (userId && session.mode === 'subscription') {
+          // Only update if it's a subscription checkout
+          const { error } = await supabase
             .from('profiles')
             .update({
               plan: 'pro',
               subscription_status: 'active',
             })
             .eq('id', userId)
+
+          if (error) {
+            console.error('Error updating profile after checkout:', error)
+          } else {
+            console.log(`Profile updated to Pro for user: ${userId}`)
+          }
         }
         break
       }

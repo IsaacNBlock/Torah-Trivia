@@ -1,19 +1,426 @@
-export default function PlayPage() {
-  return (
-    <main className="min-h-screen p-8">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-4xl font-bold mb-8">Play Torah Trivia</h1>
-        
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
-          <p className="text-center text-gray-600 dark:text-gray-400">
-            Question generation coming soon...
-          </p>
-          <p className="text-center text-sm text-gray-500 mt-4">
-            This page will display AI-generated Torah trivia questions
-          </p>
-        </div>
-      </div>
-    </main>
-  )
+'use client'
+
+import { useState, useEffect } from 'react'
+import { ProtectedRoute } from '@/components/ProtectedRoute'
+import { authenticatedFetch } from '@/lib/api-client'
+import { Question, QuestionResponse, AnswerResponse, QuestionCategory } from '@/lib/types'
+import { useAuth } from '@/components/AuthProvider'
+
+type GameState = 'loading' | 'question' | 'answered' | 'error'
+type DifficultyTier = 'Beginner' | 'Student' | 'Scholar' | 'Chacham' | 'Gadol'
+
+const CATEGORIES: QuestionCategory[] = ['Chumash', 'Tanach', 'Talmud', 'Halacha', 'Jewish History']
+const DIFFICULTY_TIERS: DifficultyTier[] = ['Beginner', 'Student', 'Scholar', 'Chacham', 'Gadol']
+
+const TIER_DIFFICULTY_MAP: Record<DifficultyTier, { difficulty: string; points: string }> = {
+  'Beginner': { difficulty: 'easy', points: '10 pts' },
+  'Student': { difficulty: 'easy', points: '10 pts' },
+  'Scholar': { difficulty: 'medium', points: '15 pts' },
+  'Chacham': { difficulty: 'hard', points: '20 pts' },
+  'Gadol': { difficulty: 'hard', points: '20 pts' },
 }
 
+export default function PlayPage() {
+  const [gameState, setGameState] = useState<GameState>('loading')
+  const [question, setQuestion] = useState<Question | null>(null)
+  const [questionId, setQuestionId] = useState<string | null>(null)
+  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null)
+  const [answerResult, setAnswerResult] = useState<AnswerResponse | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [selectedCategory, setSelectedCategory] = useState<QuestionCategory>('Chumash')
+  const [selectedTier, setSelectedTier] = useState<DifficultyTier | null>(null) // null = use user's current tier
+  const [reviewSubmitted, setReviewSubmitted] = useState(false)
+  const [reviewLoading, setReviewLoading] = useState(false)
+  const { user } = useAuth()
+
+  // Fetch a new question
+  const fetchQuestion = async (category?: QuestionCategory, tier?: DifficultyTier | null) => {
+    const categoryToUse = category || selectedCategory
+    const tierToUse = tier !== undefined ? tier : selectedTier
+    setGameState('loading')
+    setError(null)
+    setSelectedAnswer(null)
+    setAnswerResult(null)
+    setReviewSubmitted(false)
+
+    try {
+      let url = `/api/questions/next?category=${encodeURIComponent(categoryToUse)}`
+      if (tierToUse) {
+        url += `&tier=${encodeURIComponent(tierToUse)}`
+      }
+      
+      const response = await authenticatedFetch(url)
+      const data: QuestionResponse = await response.json()
+
+      if (!response.ok || data.error) {
+        throw new Error(data.error || 'Failed to fetch question')
+      }
+
+      setQuestion(data.question)
+      setQuestionId(data.questionId || null)
+      setGameState('question')
+    } catch (err: any) {
+      setError(err.message || 'Failed to load question')
+      setGameState('error')
+    }
+  }
+
+  // Submit answer
+  const submitAnswer = async () => {
+    if (!question || !selectedAnswer) return
+
+    setGameState('loading')
+
+    try {
+      const response = await authenticatedFetch('/api/questions/answer', {
+        method: 'POST',
+        body: JSON.stringify({
+          question,
+          selectedAnswer,
+          questionId,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to submit answer')
+      }
+
+      const result: AnswerResponse = await response.json()
+      setAnswerResult(result)
+      setGameState('answered')
+    } catch (err: any) {
+      setError(err.message || 'Failed to submit answer')
+      setGameState('error')
+    }
+  }
+
+  // Submit for Rabbinic Review
+  const submitForReview = async () => {
+    if (!questionId) return
+
+    setReviewLoading(true)
+    try {
+      const response = await authenticatedFetch('/api/questions/review', {
+        method: 'POST',
+        body: JSON.stringify({ questionId }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to submit for review')
+      }
+
+      setReviewSubmitted(true)
+    } catch (err: any) {
+      alert(err.message || 'Failed to submit for review')
+    } finally {
+      setReviewLoading(false)
+    }
+  }
+
+  // Handle category change
+  const handleCategoryChange = (category: QuestionCategory) => {
+    setSelectedCategory(category)
+    fetchQuestion(category, selectedTier)
+  }
+
+  // Handle tier/difficulty change
+  const handleTierChange = (tier: DifficultyTier | null) => {
+    setSelectedTier(tier)
+    fetchQuestion(selectedCategory, tier)
+  }
+
+  // Load first question on mount
+  useEffect(() => {
+    if (user) {
+      fetchQuestion(selectedCategory)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user])
+
+  return (
+    <ProtectedRoute>
+      <main className="min-h-screen p-4 md:p-8 bg-gray-50 dark:bg-gray-900">
+        <div className="max-w-4xl mx-auto">
+          <h1 className="text-4xl font-bold mb-8 text-gray-900 dark:text-white">
+            Play Torah Trivia
+          </h1>
+
+          {/* Category Selection */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 mb-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+              Select Category:
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {CATEGORIES.map((category) => (
+                <button
+                  key={category}
+                  onClick={() => handleCategoryChange(category)}
+                  disabled={gameState === 'loading'}
+                  className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
+                    selectedCategory === category
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600'
+                  } ${gameState === 'loading' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  {category}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Difficulty/Tier Selection */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 mb-6">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+              Select Question Difficulty:
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => handleTierChange(null)}
+                disabled={gameState === 'loading'}
+                className={`px-4 py-2 rounded-lg font-semibold transition-colors text-sm ${
+                  selectedTier === null
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600'
+                } ${gameState === 'loading' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                title="Uses your current tier automatically"
+              >
+                Auto (Your Tier)
+              </button>
+              {DIFFICULTY_TIERS.map((tier) => {
+                const tierInfo = TIER_DIFFICULTY_MAP[tier]
+                return (
+                  <button
+                    key={tier}
+                    onClick={() => handleTierChange(tier)}
+                    disabled={gameState === 'loading'}
+                    className={`px-4 py-2 rounded-lg font-semibold transition-colors text-sm ${
+                      selectedTier === tier
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600'
+                    } ${gameState === 'loading' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    title={`${tierInfo.difficulty} difficulty - ${tierInfo.points} for correct answer`}
+                  >
+                    {tier} ({tierInfo.points})
+                  </button>
+                )
+              })}
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+              Harder questions are worth more points! Easy: 10 pts | Medium: 15 pts | Hard: 20 pts
+            </p>
+          </div>
+
+          {gameState === 'loading' && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
+              <div className="flex flex-col items-center justify-center space-y-4">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                <p className="text-gray-600 dark:text-gray-400">
+                  {question ? 'Checking your answer...' : 'Loading question...'}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {gameState === 'error' && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
+              <div className="text-center space-y-4">
+                <div className="text-red-600 dark:text-red-400 text-6xl">⚠️</div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  Oops! Something went wrong
+                </h2>
+                <p className="text-gray-600 dark:text-gray-400">{error}</p>
+                <div className="pt-4">
+                  <button
+                    onClick={() => fetchQuestion(selectedCategory, selectedTier)}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                  >
+                    Try Again
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {gameState === 'question' && question && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 md:p-8">
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                  <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full text-sm font-semibold">
+                    {question.category}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-full text-sm font-semibold capitalize">
+                      {question.difficulty}
+                    </span>
+                    <span className="px-3 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded-full text-sm font-semibold">
+                      {question.difficulty === 'easy' ? '+10 pts' : question.difficulty === 'medium' ? '+15 pts' : '+20 pts'}
+                    </span>
+                  </div>
+                </div>
+                <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-6">
+                  {question.question}
+                </h2>
+              </div>
+
+              <div className="space-y-3 mb-6">
+                {question.options.map((option, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setSelectedAnswer(option)}
+                    disabled={gameState !== 'question'}
+                    className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
+                      selectedAnswer === option
+                        ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-600'
+                        : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    } ${
+                      gameState !== 'question' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                    }`}
+                  >
+                    <div className="flex items-center">
+                      <div
+                        className={`w-6 h-6 rounded-full border-2 mr-3 flex items-center justify-center ${
+                          selectedAnswer === option
+                            ? 'border-blue-600 bg-blue-600'
+                            : 'border-gray-300 dark:border-gray-600'
+                        }`}
+                      >
+                        {selectedAnswer === option && (
+                          <div className="w-2 h-2 rounded-full bg-white"></div>
+                        )}
+                      </div>
+                      <span className="text-lg text-gray-900 dark:text-white">{option}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={submitAnswer}
+                disabled={!selectedAnswer}
+                className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold text-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Submit Answer
+              </button>
+            </div>
+          )}
+
+          {gameState === 'answered' && answerResult && question && (
+            <div className="space-y-6">
+              <div
+                className={`bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 md:p-8 ${
+                  answerResult.correct
+                    ? 'border-2 border-green-500'
+                    : 'border-2 border-red-500'
+                }`}
+              >
+                <div className="text-center mb-6">
+                  <div className="text-7xl mb-4">
+                    {answerResult.correct ? '✅' : '❌'}
+                  </div>
+                  <h2
+                    className={`text-3xl font-bold mb-2 ${
+                      answerResult.correct
+                        ? 'text-green-600 dark:text-green-400'
+                        : 'text-red-600 dark:text-red-400'
+                    }`}
+                  >
+                    {answerResult.correct ? 'Correct!' : 'Incorrect'}
+                  </h2>
+                  <p className="text-gray-600 dark:text-gray-400 text-lg">
+                    The correct answer was: <strong>{question.correct_answer}</strong>
+                  </p>
+                </div>
+
+                <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-6">
+                  <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
+                    Explanation:
+                  </h3>
+                  <p className="text-gray-700 dark:text-gray-300">{answerResult.explanation}</p>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                      {answerResult.pointsEarned > 0 ? '+' : ''}
+                      {answerResult.pointsEarned}
+                    </div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">Points</div>
+                  </div>
+                  <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                      {answerResult.newTotalPoints}
+                    </div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">Total</div>
+                  </div>
+                  <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                      {answerResult.streak}
+                    </div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">Streak</div>
+                  </div>
+                  <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
+                      {answerResult.newTier}
+                    </div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">Tier</div>
+                  </div>
+                </div>
+
+                {answerResult.streakBonus > 0 && (
+                  <div className="bg-yellow-100 dark:bg-yellow-900/30 border-2 border-yellow-400 rounded-lg p-4 mb-6">
+                    <div className="flex items-center justify-center space-x-2">
+                      <span className="text-2xl">🔥</span>
+                      <span className="font-semibold text-yellow-800 dark:text-yellow-200">
+                        Streak Bonus! +{answerResult.streakBonus} points
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Rabbinic Review Button */}
+                {questionId && (
+                  <div className="mb-6">
+                    {reviewSubmitted ? (
+                      <div className="bg-green-50 dark:bg-green-900/20 border-2 border-green-400 rounded-lg p-4 text-center">
+                        <p className="text-green-800 dark:text-green-200 font-semibold">
+                          ✅ Question submitted for Rabbinic Review
+                        </p>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={submitForReview}
+                        disabled={reviewLoading}
+                        className="w-full py-3 bg-purple-600 text-white rounded-lg font-semibold text-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2"
+                      >
+                        {reviewLoading ? (
+                          <>
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                            <span>Submitting...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>📜</span>
+                            <span>Send for Rabbinic Review</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                <button
+                  onClick={() => fetchQuestion(selectedCategory, selectedTier)}
+                  className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold text-lg hover:bg-blue-700 transition-colors"
+                >
+                  Next Question
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </main>
+    </ProtectedRoute>
+  )
+}

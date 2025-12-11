@@ -17,7 +17,10 @@ export interface Profile {
   updated_at?: string
 }
 
+export type QuestionCategory = 'Chumash' | 'Tanach' | 'Talmud' | 'Halacha' | 'Jewish History'
+
 export interface Question {
+  id?: string
   question: string
   options: string[]
   correct_answer: string
@@ -28,12 +31,14 @@ export interface Question {
 
 export interface QuestionResponse {
   question: Question
+  questionId?: string
   error?: string
 }
 
 export interface AnswerRequest {
   question: Question
   selectedAnswer: string
+  questionId?: string
 }
 
 export interface AnswerResponse {

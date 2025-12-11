@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { AuthProvider } from '@/components/AuthProvider'
+import { Navbar } from '@/components/Navbar'
 
 export const metadata: Metadata = {
   title: 'Torah Trivia - Test Your Torah Knowledge',
@@ -13,7 +15,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <AuthProvider>
+          <Navbar />
+          {children}
+        </AuthProvider>
+      </body>
     </html>
   )
 }
