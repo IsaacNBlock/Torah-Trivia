@@ -103,3 +103,6 @@ stripe listen --forward-to localhost:3002/api/stripe/webhook
 ```
 
 Leave this terminal open while testing!
+
+
+

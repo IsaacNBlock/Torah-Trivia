@@ -3,22 +3,21 @@
 import { useState, useEffect } from 'react'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { authenticatedFetch } from '@/lib/api-client'
-import { Question, QuestionResponse, AnswerResponse, QuestionCategory } from '@/lib/types'
+import { Question, QuestionResponse, AnswerResponse, QuestionCategory, Profile, CHUMASH_PARSHAOT, TANACH_BOOKS, TALMUD_TRACTATES, HALACHA_TOPICS, Tier } from '@/lib/types'
 import { useAuth } from '@/components/AuthProvider'
+import { getTierPoints, getTierDifficulty } from '@/lib/utils'
 
 type GameState = 'loading' | 'question' | 'answered' | 'error'
-type DifficultyTier = 'Beginner' | 'Student' | 'Scholar' | 'Chacham' | 'Gadol'
+type DifficultyTier = Tier
 
 const CATEGORIES: QuestionCategory[] = ['Chumash', 'Tanach', 'Talmud', 'Halacha', 'Jewish History']
-const DIFFICULTY_TIERS: DifficultyTier[] = ['Beginner', 'Student', 'Scholar', 'Chacham', 'Gadol']
+const DIFFICULTY_TIERS: DifficultyTier[] = ['Beginner', 'Student', 'Scholar', 'Chacham']
 
-const TIER_DIFFICULTY_MAP: Record<DifficultyTier, { difficulty: string; points: string }> = {
-  'Beginner': { difficulty: 'easy', points: '10 pts' },
-  'Student': { difficulty: 'easy', points: '10 pts' },
-  'Scholar': { difficulty: 'medium', points: '15 pts' },
-  'Chacham': { difficulty: 'hard', points: '20 pts' },
-  'Gadol': { difficulty: 'hard', points: '20 pts' },
-}
+// Helper function to get tier info
+const getTierInfo = (tier: DifficultyTier) => ({
+  difficulty: getTierDifficulty(tier),
+  points: `${getTierPoints(tier)} pts`
+})
 
 export default function PlayPage() {
   const [gameState, setGameState] = useState<GameState>('loading')
@@ -29,14 +28,33 @@ export default function PlayPage() {
   const [error, setError] = useState<string | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<QuestionCategory>('Chumash')
   const [selectedTier, setSelectedTier] = useState<DifficultyTier | null>(null) // null = use user's current tier
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(null)
   const [reviewSubmitted, setReviewSubmitted] = useState(false)
   const [reviewLoading, setReviewLoading] = useState(false)
+  const [profile, setProfile] = useState<Profile | null>(null)
+  const [profileLoading, setProfileLoading] = useState(true)
   const { user } = useAuth()
 
+  // Fetch user profile to check subscription status
+  const fetchProfile = async () => {
+    try {
+      const response = await authenticatedFetch('/api/profile')
+      if (response.ok) {
+        const data = await response.json()
+        setProfile(data.profile)
+      }
+    } catch (err) {
+      console.error('Failed to fetch profile:', err)
+    } finally {
+      setProfileLoading(false)
+    }
+  }
+
   // Fetch a new question
-  const fetchQuestion = async (category?: QuestionCategory, tier?: DifficultyTier | null) => {
+  const fetchQuestion = async (category?: QuestionCategory, tier?: DifficultyTier | null, subcategory?: string | null) => {
     const categoryToUse = category || selectedCategory
     const tierToUse = tier !== undefined ? tier : selectedTier
+    const subcategoryToUse = subcategory !== undefined ? subcategory : selectedSubcategory
     setGameState('loading')
     setError(null)
     setSelectedAnswer(null)
@@ -47,6 +65,9 @@ export default function PlayPage() {
       let url = `/api/questions/next?category=${encodeURIComponent(categoryToUse)}`
       if (tierToUse) {
         url += `&tier=${encodeURIComponent(tierToUse)}`
+      }
+      if (subcategoryToUse) {
+        url += `&subcategory=${encodeURIComponent(subcategoryToUse)}`
       }
       
       const response = await authenticatedFetch(url)
@@ -122,18 +143,47 @@ export default function PlayPage() {
   // Handle category change
   const handleCategoryChange = (category: QuestionCategory) => {
     setSelectedCategory(category)
-    fetchQuestion(category, selectedTier)
+    setSelectedSubcategory(null) // Reset subcategory when category changes
+    fetchQuestion(category, selectedTier, null)
   }
 
   // Handle tier/difficulty change
   const handleTierChange = (tier: DifficultyTier | null) => {
     setSelectedTier(tier)
-    fetchQuestion(selectedCategory, tier)
+    fetchQuestion(selectedCategory, tier, selectedSubcategory)
   }
 
-  // Load first question on mount
+  // Handle subcategory change
+  const handleSubcategoryChange = (subcategory: string | null) => {
+    setSelectedSubcategory(subcategory)
+    fetchQuestion(selectedCategory, selectedTier, subcategory)
+  }
+
+  // Get subcategory options based on selected category
+  const getSubcategoryOptions = (): string[] => {
+    switch (selectedCategory) {
+      case 'Chumash':
+        return CHUMASH_PARSHAOT
+      case 'Tanach':
+        return TANACH_BOOKS
+      case 'Talmud':
+        return TALMUD_TRACTATES
+      case 'Halacha':
+        return HALACHA_TOPICS
+      case 'Jewish History':
+        return [] // No subcategory for Jewish History
+      default:
+        return []
+    }
+  }
+
+  // Check if user is a paid member
+  const isPaidMember = profile?.plan === 'pro' && profile?.subscription_status === 'active'
+
+  // Load profile and first question on mount
   useEffect(() => {
     if (user) {
+      fetchProfile()
       fetchQuestion(selectedCategory)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -170,6 +220,53 @@ export default function PlayPage() {
             </div>
           </div>
 
+          {/* Subcategory Selection (Paid Members Only) */}
+          {!profileLoading && isPaidMember && getSubcategoryOptions().length > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 mb-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                Select {selectedCategory === 'Chumash' ? 'Parsha' : selectedCategory === 'Tanach' ? 'Book' : selectedCategory === 'Talmud' ? 'Tractate' : 'Topic'} (Pro Feature):
+              </label>
+              <select
+                value={selectedSubcategory || ''}
+                onChange={(e) => handleSubcategoryChange(e.target.value || null)}
+                disabled={gameState === 'loading'}
+                className="w-full md:w-auto px-4 py-2 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <option value="">All {selectedCategory}</option>
+                {getSubcategoryOptions().map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                💎 Pro members can focus on specific topics
+              </p>
+            </div>
+          )}
+
+          {/* Upgrade prompt for free users */}
+          {!profileLoading && !isPaidMember && getSubcategoryOptions().length > 0 && (
+            <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg shadow-lg p-4 mb-4 border-2 border-purple-200 dark:border-purple-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
+                    💎 Unlock Subcategory Selection
+                  </p>
+                  <p className="text-xs text-gray-600 dark:text-gray-300">
+                    Upgrade to Pro to choose specific {selectedCategory === 'Chumash' ? 'Parshiot' : selectedCategory === 'Tanach' ? 'Books' : selectedCategory === 'Talmud' ? 'Tractates' : 'Topics'}
+                  </p>
+                </div>
+                <a
+                  href="/billing"
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg font-semibold text-sm hover:bg-purple-700 transition-colors whitespace-nowrap"
+                >
+                  Upgrade to Pro
+                </a>
+              </div>
+            </div>
+          )}
+
           {/* Difficulty/Tier Selection */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 mb-6">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
@@ -189,7 +286,7 @@ export default function PlayPage() {
                 Auto (Your Tier)
               </button>
               {DIFFICULTY_TIERS.map((tier) => {
-                const tierInfo = TIER_DIFFICULTY_MAP[tier]
+                const tierInfo = getTierInfo(tier)
                 return (
                   <button
                     key={tier}
@@ -208,7 +305,7 @@ export default function PlayPage() {
               })}
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-              Harder questions are worth more points! Easy: 10 pts | Medium: 15 pts | Hard: 20 pts
+              Each tier has different point values! Beginner: 10 pts | Student: 20 pts | Scholar: 30 pts | Chacham: 40 pts
             </p>
           </div>
 
@@ -233,7 +330,7 @@ export default function PlayPage() {
                 <p className="text-gray-600 dark:text-gray-400">{error}</p>
                 <div className="pt-4">
                   <button
-                    onClick={() => fetchQuestion(selectedCategory, selectedTier)}
+                    onClick={() => fetchQuestion(selectedCategory, selectedTier, selectedSubcategory)}
                     className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
                   >
                     Try Again
@@ -255,7 +352,11 @@ export default function PlayPage() {
                       {question.difficulty}
                     </span>
                     <span className="px-3 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded-full text-sm font-semibold">
-                      {question.difficulty === 'easy' ? '+10 pts' : question.difficulty === 'medium' ? '+15 pts' : '+20 pts'}
+                      {(() => {
+                        // Determine tier: use selectedTier if available, otherwise infer from difficulty
+                        const tierForDisplay = selectedTier || (question.difficulty === 'easy' ? 'Beginner' : question.difficulty === 'medium' ? 'Student' : 'Scholar')
+                        return `+${getTierPoints(tierForDisplay as Tier)} pts`
+                      })()}
                     </span>
                   </div>
                 </div>
@@ -411,7 +512,7 @@ export default function PlayPage() {
                 )}
 
                 <button
-                  onClick={() => fetchQuestion(selectedCategory, selectedTier)}
+                  onClick={() => fetchQuestion(selectedCategory, selectedTier, selectedSubcategory)}
                   className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold text-lg hover:bg-blue-700 transition-colors"
                 >
                   Next Question
@@ -424,3 +525,6 @@ export default function PlayPage() {
     </ProtectedRoute>
   )
 }
+
+
+

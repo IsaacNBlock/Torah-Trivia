@@ -205,3 +205,6 @@ Google authentication is working if:
 4. **For production** - Add production redirect URL to Supabase
 
 Everything is set up and ready to use! 🎊
+
+
+

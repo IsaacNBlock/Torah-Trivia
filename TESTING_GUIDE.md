@@ -212,3 +212,6 @@ Once Play page is working:
 - Test on mobile (responsive design should work)
 
 Happy testing! 🎮
+
+
+

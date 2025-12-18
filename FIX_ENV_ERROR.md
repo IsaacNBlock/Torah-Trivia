@@ -100,3 +100,6 @@ NEXT_PUBLIC_APP_URL=http://localhost:3002
 ```
 
 Once you've updated the file with real values and restarted the server, the error should be fixed! 🎉
+
+
+

@@ -28,3 +28,6 @@ export async function GET(request: NextRequest) {
   // Redirect to home page
   return NextResponse.redirect(new URL('/', origin))
 }
+
+
+

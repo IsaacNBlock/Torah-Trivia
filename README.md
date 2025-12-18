@@ -37,13 +37,12 @@ This application integrates **OpenAI**, **Supabase**, **Stripe**, **Google Authe
 
 #### Tiers:
 
-| Tier | Points |
-|------|--------|
-| Beginner | 0–99 |
-| Student | 100–299 |
-| Scholar | 300–699 |
-| Chacham | 700–1499 |
-| Gadol | 1500+ |
+| Tier | Points Threshold | Points Per Question |
+|------|------------------|-------------------|
+| Beginner | 0–99 | 10 pts |
+| Student | 100–299 | 20 pts |
+| Scholar | 300–699 | 30 pts |
+| Chacham | 700+ | 40 pts |
 
 ---
 

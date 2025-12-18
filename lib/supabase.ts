@@ -33,3 +33,6 @@ export function createServerClient() {
   return createClient(supabaseUrl, serviceRoleKey)
 }
 
+
+
+

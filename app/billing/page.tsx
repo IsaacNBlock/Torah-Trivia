@@ -22,15 +22,19 @@ export default function BillingPage() {
   useEffect(() => {
     if (user) {
       fetchProfile()
+      // Automatically sync with Stripe when page loads
+      autoSyncWithStripe()
     }
   }, [user])
 
   useEffect(() => {
     if (success) {
-      // Refresh profile after successful payment
+      // Refresh profile after successful payment and sync
       setTimeout(() => {
-        fetchProfile()
-        router.replace('/billing')
+        autoSyncWithStripe().then(() => {
+          fetchProfile()
+          router.replace('/billing')
+        })
       }, 1000)
     }
   }, [success])
@@ -72,6 +76,25 @@ export default function BillingPage() {
     } catch (error: any) {
       alert('Error: ' + (error.message || 'Failed to start checkout process'))
       setCheckoutLoading(false)
+    }
+  }
+
+  const autoSyncWithStripe = async () => {
+    try {
+      const response = await authenticatedFetch('/api/stripe/manual-sync', {
+        method: 'POST',
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        // Refresh profile after successful sync
+        await fetchProfile()
+      }
+      // Silently ignore if no subscription found - this is normal for free users
+    } catch (error: any) {
+      // Silently ignore errors during auto-sync - don't show to user
+      console.error('Auto-sync with Stripe failed:', error)
     }
   }
 
@@ -324,3 +347,6 @@ export default function BillingPage() {
     </ProtectedRoute>
   )
 }
+
+
+

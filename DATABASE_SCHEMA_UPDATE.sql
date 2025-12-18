@@ -63,3 +63,74 @@ CREATE POLICY "Authenticated users can submit reviews"
 CREATE INDEX IF NOT EXISTS idx_rabinic_reviews_question_id ON rabinic_reviews(question_id);
 CREATE INDEX IF NOT EXISTS idx_rabinic_reviews_status ON rabinic_reviews(review_status);
 CREATE INDEX IF NOT EXISTS idx_questions_category ON questions(category);
+
+-- 3. Create user_answers table to track all user answer attempts
+CREATE TABLE IF NOT EXISTS user_answers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  question_id UUID REFERENCES questions(id) ON DELETE CASCADE,
+  selected_answer TEXT NOT NULL,
+  correct BOOLEAN NOT NULL,
+  points_earned INTEGER NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Enable Row Level Security for user_answers
+ALTER TABLE user_answers ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Users can view their own answers
+CREATE POLICY "Users can view own answers"
+  ON user_answers FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- Policy: Service role can insert answers (for API routes)
+CREATE POLICY "Service role can insert answers"
+  ON user_answers FOR INSERT
+  WITH CHECK (true);
+
+-- Create indexes for faster lookups
+CREATE INDEX IF NOT EXISTS idx_user_answers_user_id ON user_answers(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_answers_question_id ON user_answers(question_id);
+CREATE INDEX IF NOT EXISTS idx_user_answers_correct ON user_answers(correct);
+CREATE INDEX IF NOT EXISTS idx_user_answers_created_at ON user_answers(created_at DESC);
+
+-- 4. Create points_history table to track points over time
+CREATE TABLE IF NOT EXISTS points_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  points INTEGER NOT NULL,
+  points_change INTEGER NOT NULL, -- positive for gains, negative for losses
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Enable Row Level Security for points_history
+ALTER TABLE points_history ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Users can view their own points history
+CREATE POLICY "Users can view own points history"
+  ON points_history FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- Policy: Service role can insert points history (for API routes)
+CREATE POLICY "Service role can insert points history"
+  ON points_history FOR INSERT
+  WITH CHECK (true);
+
+-- Create indexes for faster lookups
+CREATE INDEX IF NOT EXISTS idx_points_history_user_id ON points_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_points_history_created_at ON points_history(created_at DESC);
+
+-- 5. Add subcategory field to questions table (for paid members feature)
+ALTER TABLE questions ADD COLUMN IF NOT EXISTS subcategory TEXT;
+
+-- Create index on subcategory for faster lookups
+CREATE INDEX IF NOT EXISTS idx_questions_subcategory ON questions(subcategory);
+
+-- 6. Add tier field to questions table (for 4-tier point system)
+ALTER TABLE questions ADD COLUMN IF NOT EXISTS tier TEXT;
+
+-- Create index on tier for faster lookups
+CREATE INDEX IF NOT EXISTS idx_questions_tier ON questions(tier);
+
+
+

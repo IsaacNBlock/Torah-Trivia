@@ -39,7 +39,6 @@ export default function Home() {
     'Student': 'bg-blue-500',
     'Scholar': 'bg-purple-500',
     'Chacham': 'bg-yellow-500',
-    'Gadol': 'bg-gradient-to-r from-yellow-400 to-orange-500',
   }
 
   return (
@@ -119,7 +118,7 @@ export default function Home() {
           <h2 className="text-2xl font-semibold">How It Works</h2>
           <ul className="list-disc list-inside space-y-2 text-gray-700 dark:text-gray-300">
             <li>Answer AI-generated Torah trivia questions</li>
-            <li>Earn points and climb through tiers (Beginner → Gadol)</li>
+            <li>Earn points and climb through tiers (Beginner → Chacham)</li>
             <li>Build your streak for bonus points</li>
             <li>Unlock Pro features for unlimited questions</li>
           </ul>
@@ -128,3 +127,6 @@ export default function Home() {
     </main>
   )
 }
+
+
+

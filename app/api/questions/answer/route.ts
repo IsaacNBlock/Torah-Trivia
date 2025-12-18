@@ -36,10 +36,42 @@ export async function POST(request: NextRequest) {
     }
 
     const correct = selectedAnswer === question.correct_answer
+    
+    // Get the tier for this question (from database if questionId exists, otherwise infer from difficulty)
+    let questionTier: Tier = profile.tier // Default to user's tier
+    if (questionId) {
+      const { data: questionData } = await supabase
+        .from('questions')
+        .select('tier')
+        .eq('id', questionId)
+        .single()
+      
+      if (questionData?.tier) {
+        questionTier = questionData.tier as Tier
+      } else {
+        // Fallback: infer tier from difficulty
+        const difficultyToTier: Record<string, Tier> = {
+          'easy': 'Beginner',
+          'medium': 'Student',
+          'hard': 'Scholar', // Default hard to Scholar (Chacham also uses hard)
+        }
+        questionTier = difficultyToTier[question.difficulty] || profile.tier
+      }
+    } else {
+      // No questionId - infer tier from difficulty
+      const difficultyToTier: Record<string, Tier> = {
+        'easy': 'Beginner',
+        'medium': 'Student',
+        'hard': 'Scholar', // Default hard to Scholar
+      }
+      questionTier = difficultyToTier[question.difficulty] || profile.tier
+    }
+    
+    // Use the question's tier to determine points (each tier has different point values)
     const { pointsEarned, streakBonus, newStreak } = calculatePoints(
       correct,
       profile.streak,
-      question.difficulty // Pass difficulty to calculate points
+      questionTier // Pass question's tier to calculate points
     )
 
     const newTotalPoints = Math.max(0, profile.points + pointsEarned)
@@ -85,8 +117,28 @@ export async function POST(request: NextRequest) {
           .from('questions')
           .update(updates)
           .eq('id', questionId)
+
+        // Save user answer to user_answers table
+        await supabase
+          .from('user_answers')
+          .insert({
+            user_id: userId,
+            question_id: questionId,
+            selected_answer: selectedAnswer,
+            correct: correct,
+            points_earned: pointsEarned,
+          })
       }
     }
+
+    // Save points history
+    await supabase
+      .from('points_history')
+      .insert({
+        user_id: userId,
+        points: newTotalPoints,
+        points_change: pointsEarned,
+      })
 
     const response: AnswerResponse = {
       correct,
@@ -107,4 +159,7 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
+
+
 

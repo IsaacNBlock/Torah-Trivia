@@ -13,3 +13,6 @@ echo "Press Ctrl+C to stop"
 echo ""
 
 stripe listen --forward-to localhost:3002/api/stripe/webhook
+
+
+

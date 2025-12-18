@@ -22,11 +22,12 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Get category and difficulty/tier from query params
+    // Get category, subcategory, and difficulty/tier from query params
     const { searchParams } = new URL(request.url)
     const category = searchParams.get('category') || 'Chumash'
+    const subcategory = searchParams.get('subcategory') || null
     const requestedDifficulty = searchParams.get('difficulty') // 'easy', 'medium', 'hard'
-    const requestedTier = searchParams.get('tier') // 'Beginner', 'Student', 'Scholar', 'Chacham', 'Gadol'
+    const requestedTier = searchParams.get('tier') // 'Beginner', 'Student', 'Scholar', 'Chacham'
     
     // Validate category
     const validCategories = ['Chumash', 'Tanach', 'Talmud', 'Halacha', 'Jewish History']
@@ -50,6 +51,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         { error: 'Profile not found' },
         { status: 404 }
+      )
+    }
+
+    // Check if subcategory is provided - only allowed for paid members
+    if (subcategory && (profile.plan !== 'pro' || profile.subscription_status !== 'active')) {
+      return NextResponse.json(
+        { error: 'Subcategory selection is only available for Pro members' },
+        { status: 403 }
       )
     }
 
@@ -98,12 +107,11 @@ export async function GET(request: NextRequest) {
       // User requested a specific tier - map to difficulty
       const tierToDifficulty: Record<string, string> = {
         'Beginner': 'easy',
-        'Student': 'easy',
-        'Scholar': 'medium',
+        'Student': 'medium',
+        'Scholar': 'hard',
         'Chacham': 'hard',
-        'Gadol': 'hard',
       }
-      const validTiers = ['Beginner', 'Student', 'Scholar', 'Chacham', 'Gadol']
+      const validTiers = ['Beginner', 'Student', 'Scholar', 'Chacham']
       if (validTiers.includes(requestedTier)) {
         difficulty = tierToDifficulty[requestedTier] || 'medium'
         tier = requestedTier // Use requested tier for prompt context
@@ -113,10 +121,9 @@ export async function GET(request: NextRequest) {
       tier = profile.tier || 'Beginner'
       const difficultyMap: Record<string, string> = {
         'Beginner': 'easy',
-        'Student': 'easy',
-        'Scholar': 'medium',
+        'Student': 'medium',
+        'Scholar': 'hard',
         'Chacham': 'hard',
-        'Gadol': 'hard',
       }
       difficulty = difficultyMap[tier] || 'medium'
     }
@@ -130,6 +137,16 @@ export async function GET(request: NextRequest) {
       'Jewish History': 'Jewish History (from Biblical times to modern era)',
     }
 
+    // Build subcategory context for prompt
+    let subcategoryContext = ''
+    if (subcategory) {
+      const subcategoryLabel = category === 'Chumash' ? 'Parsha' : 
+                               category === 'Tanach' ? 'Book' : 
+                               category === 'Talmud' ? 'Tractate' : 
+                               'Topic'
+      subcategoryContext = `\nSpecific ${subcategoryLabel}: ${subcategory}\nIMPORTANT: The question must be specifically about ${subcategory}.`
+    }
+
     const prompt = `Generate a Torah trivia question. Return ONLY valid JSON in this exact format:
 {
   "question": "The question text",
@@ -137,13 +154,13 @@ export async function GET(request: NextRequest) {
   "correct_answer": "Option A",
   "explanation": "Brief explanation of why this is correct",
   "category": "${category}",
-  "difficulty": "${difficulty}"
+  "difficulty": "${difficulty}"${subcategory ? ',\n  "subcategory": "' + subcategory + '"' : ''}
 }
 
-Category: ${categoryMapping[category] || category}
+Category: ${categoryMapping[category] || category}${subcategoryContext}
 Difficulty: ${difficulty}
 
-Generate a ${difficulty} difficulty ${category} trivia question appropriate for a ${tier} level student:`
+Generate a ${difficulty} difficulty ${category} trivia question appropriate for a ${tier} level student${subcategory ? ` specifically focused on ${subcategory}` : ''}:`
 
     // Use gpt-3.5-turbo for cost savings (can switch to gpt-4 if needed)
     const completion = await openai.chat.completions.create({
@@ -174,6 +191,9 @@ Generate a ${difficulty} difficulty ${category} trivia question appropriate for 
     // Ensure category and difficulty match requested values
     question.category = category
     question.difficulty = difficulty // Ensure difficulty is set correctly
+    if (subcategory) {
+      question.subcategory = subcategory
+    }
 
     // Save question to database
     const { data: savedQuestion, error: saveError } = await supabase
@@ -185,6 +205,8 @@ Generate a ${difficulty} difficulty ${category} trivia question appropriate for 
         explanation: question.explanation,
         category: question.category,
         difficulty: question.difficulty,
+        subcategory: subcategory || null,
+        tier: tier, // Store the tier used to generate this question
         generated_by: user.id,
       })
       .select('id')
@@ -208,4 +230,7 @@ Generate a ${difficulty} difficulty ${category} trivia question appropriate for 
     )
   }
 }
+
+
+
 
