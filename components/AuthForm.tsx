@@ -157,7 +157,7 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
               onClick={() => setMode('signup')}
               className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
             >
-              Don't have an account? Sign up
+              Don&apos;t have an account? Sign up
             </button>
             <div>
               <button

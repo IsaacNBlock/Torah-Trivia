@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { authenticatedFetch } from '@/lib/api-client'
@@ -28,7 +28,7 @@ export default function HeadToHeadGamePage() {
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null)
 
   // Fetch game state
-  const fetchGameState = async () => {
+  const fetchGameState = useCallback(async () => {
     try {
       const response = await authenticatedFetch(`/api/head-to-head/${gameId}`)
       const data: GameStateResponse = await response.json()
@@ -56,7 +56,7 @@ export default function HeadToHeadGamePage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [gameId])
 
   // Start game
   const handleStartGame = async () => {
@@ -180,7 +180,7 @@ export default function HeadToHeadGamePage() {
     return () => {
       if (interval) clearInterval(interval)
     }
-  }, [gameId, user, gameView])
+  }, [gameId, user, gameView, fetchGameState])
 
   if (loading && !game) {
     return (
@@ -295,7 +295,7 @@ export default function HeadToHeadGamePage() {
                       onClick={handleReady}
                       className="w-full py-3 bg-green-600 text-white rounded-lg font-semibold text-lg hover:bg-green-700 transition-colors"
                     >
-                      I'm Ready
+                      I&apos;m Ready
                     </button>
                   )}
                   {isPlayer1 && !game.player1_ready && (
@@ -303,7 +303,7 @@ export default function HeadToHeadGamePage() {
                       onClick={handleReady}
                       className="w-full py-3 bg-green-600 text-white rounded-lg font-semibold text-lg hover:bg-green-700 transition-colors"
                     >
-                      I'm Ready
+                      I&apos;m Ready
                     </button>
                   )}
                   {game.player1_ready && game.player2_ready && isPlayer1 && (
@@ -349,7 +349,7 @@ export default function HeadToHeadGamePage() {
                   <>
                     <div className="text-6xl mb-4">🤝</div>
                     <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-                      It's a Tie!
+                      It&apos;s a Tie!
                     </h2>
                   </>
                 ) : isWinner ? (

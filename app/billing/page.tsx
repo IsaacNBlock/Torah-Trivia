@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { useAuth } from '@/components/AuthProvider'
 import { authenticatedFetch } from '@/lib/api-client'
@@ -25,7 +25,7 @@ export default function BillingPage() {
       // Automatically sync with Stripe when page loads
       autoSyncWithStripe()
     }
-  }, [user])
+  }, [user, fetchProfile, autoSyncWithStripe])
 
   useEffect(() => {
     if (success) {
@@ -37,9 +37,9 @@ export default function BillingPage() {
         })
       }, 1000)
     }
-  }, [success])
+  }, [success, autoSyncWithStripe, fetchProfile, router])
 
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     try {
       const response = await authenticatedFetch('/api/profile')
       if (response.ok) {
@@ -51,7 +51,7 @@ export default function BillingPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   const handleUpgrade = async () => {
     setCheckoutLoading(true)
@@ -79,7 +79,7 @@ export default function BillingPage() {
     }
   }
 
-  const autoSyncWithStripe = async () => {
+  const autoSyncWithStripe = useCallback(async () => {
     try {
       const response = await authenticatedFetch('/api/stripe/manual-sync', {
         method: 'POST',
@@ -96,7 +96,7 @@ export default function BillingPage() {
       // Silently ignore errors during auto-sync - don't show to user
       console.error('Auto-sync with Stripe failed:', error)
     }
-  }
+  }, [fetchProfile])
 
   const handleSync = async () => {
     setSyncing(true)

@@ -486,7 +486,7 @@ export default function PlayPage() {
                                   >
                                     {source.text && (
                                       <blockquote className="text-gray-700 dark:text-gray-300 italic mb-2">
-                                        "{source.text}"
+                                        &ldquo;{source.text}&rdquo;
                                       </blockquote>
                                     )}
                                     <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">

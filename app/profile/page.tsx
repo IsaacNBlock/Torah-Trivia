@@ -679,7 +679,7 @@ export default function ProfilePage() {
                 ) : (
                   <div className="text-center py-12 text-gray-500 dark:text-gray-400">
                     <p className="text-lg mb-2">🎉 Great job!</p>
-                    <p>You haven't gotten any questions wrong yet, or you haven't answered any questions.</p>
+                    <p>You haven&apos;t gotten any questions wrong yet, or you haven&apos;t answered any questions.</p>
                   </div>
                 )}
               </div>
