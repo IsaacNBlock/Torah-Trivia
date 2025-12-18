@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { authenticatedFetch } from '@/lib/api-client'
-import { Question, QuestionResponse, AnswerResponse, QuestionCategory, Profile, CHUMASH_PARSHAOT, TANACH_BOOKS, TALMUD_TRACTATES, HALACHA_TOPICS, Tier } from '@/lib/types'
+import { Question, QuestionResponse, AnswerResponse, QuestionCategory, Profile, CHUMASH_PARSHAOT, TANACH_BOOKS, TALMUD_TRACTATES, HALACHA_TOPICS, Tier, Source } from '@/lib/types'
 import { useAuth } from '@/components/AuthProvider'
 import { getTierPoints, getTierDifficulty } from '@/lib/utils'
 
@@ -33,6 +33,7 @@ export default function PlayPage() {
   const [reviewLoading, setReviewLoading] = useState(false)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [profileLoading, setProfileLoading] = useState(true)
+  const [showPremiumExplanation, setShowPremiumExplanation] = useState(false)
   const { user } = useAuth()
 
   // Fetch user profile to check subscription status
@@ -60,6 +61,7 @@ export default function PlayPage() {
     setSelectedAnswer(null)
     setAnswerResult(null)
     setReviewSubmitted(false)
+    setShowPremiumExplanation(false)
 
     try {
       let url = `/api/questions/next?category=${encodeURIComponent(categoryToUse)}`
@@ -109,6 +111,7 @@ export default function PlayPage() {
 
       const result: AnswerResponse = await response.json()
       setAnswerResult(result)
+      setShowPremiumExplanation(false) // Reset premium explanation visibility
       setGameState('answered')
     } catch (err: any) {
       setError(err.message || 'Failed to submit answer')
@@ -438,7 +441,92 @@ export default function PlayPage() {
                   <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
                     Explanation:
                   </h3>
-                  <p className="text-gray-700 dark:text-gray-300">{answerResult.explanation}</p>
+                  <p className="text-gray-700 dark:text-gray-300 mb-4">{answerResult.explanation}</p>
+                  
+                  {/* Premium Explanation Section */}
+                  {isPaidMember && answerResult.premium_explanation ? (
+                    <div className="mt-4 pt-4 border-t border-gray-300 dark:border-gray-600">
+                      {!showPremiumExplanation ? (
+                        <button
+                          onClick={() => setShowPremiumExplanation(true)}
+                          className="w-full py-2 px-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-colors flex items-center justify-center space-x-2"
+                        >
+                          <span>💎</span>
+                          <span>Learn More (Pro)</span>
+                        </button>
+                      ) : (
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-semibold text-purple-600 dark:text-purple-400 flex items-center space-x-2">
+                              <span>💎</span>
+                              <span>In-Depth Explanation</span>
+                            </h4>
+                            <button
+                              onClick={() => setShowPremiumExplanation(false)}
+                              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-sm"
+                            >
+                              Collapse
+                            </button>
+                          </div>
+                          <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                            {answerResult.premium_explanation}
+                          </p>
+                          
+                          {/* Sources Display */}
+                          {answerResult.sources && answerResult.sources.length > 0 && (
+                            <div className="mt-4 pt-4 border-t border-gray-300 dark:border-gray-600">
+                              <h5 className="font-semibold text-gray-900 dark:text-white mb-3">
+                                Sources & References:
+                              </h5>
+                              <div className="space-y-3">
+                                {answerResult.sources.map((source: Source, index: number) => (
+                                  <div
+                                    key={index}
+                                    className="bg-white dark:bg-gray-800 rounded-lg p-4 border-l-4 border-blue-500"
+                                  >
+                                    {source.text && (
+                                      <blockquote className="text-gray-700 dark:text-gray-300 italic mb-2">
+                                        "{source.text}"
+                                      </blockquote>
+                                    )}
+                                    <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+                                      — {source.source}
+                                    </p>
+                                    {source.commentary && (
+                                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                                        {source.commentary}
+                                      </p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : !isPaidMember && (
+                    <div className="mt-4 pt-4 border-t border-gray-300 dark:border-gray-600">
+                      <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg p-4 border-2 border-purple-200 dark:border-purple-700">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
+                              💎 Unlock In-Depth Explanations
+                            </p>
+                            <p className="text-xs text-gray-600 dark:text-gray-300">
+                              Upgrade to Pro to access detailed explanations with sources and quotes from authentic Torah texts
+                            </p>
+                          </div>
+                          <a
+                            href="/billing"
+                            className="px-4 py-2 bg-purple-600 text-white rounded-lg font-semibold text-sm hover:bg-purple-700 transition-colors whitespace-nowrap ml-4"
+                          >
+                            Upgrade to Pro
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">

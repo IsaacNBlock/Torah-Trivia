@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { calculatePoints, calculateTier } from '@/lib/utils'
-import { AnswerRequest, AnswerResponse } from '@/lib/types'
+import { AnswerRequest, AnswerResponse, Tier } from '@/lib/types'
 import { getUserFromApiRequest } from '@/lib/server-auth'
 
 export async function POST(request: NextRequest) {
@@ -96,16 +96,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Update question stats if questionId is provided
+    // Check if user is a paid member
+    const isPaidMember = profile.plan === 'pro' && profile.subscription_status === 'active'
+
+    // Fetch premium content if questionId is provided
+    let premiumExplanation: string | undefined = undefined
+    let sources: any[] | undefined = undefined
+
     if (questionId) {
-      // Fetch current stats
+      // Fetch current stats and premium content
       const { data: questionData } = await supabase
         .from('questions')
-        .select('times_answered, times_correct')
+        .select('times_answered, times_correct, premium_explanation, sources')
         .eq('id', questionId)
         .single()
 
       if (questionData) {
+        // Update question stats
         const updates: any = {
           times_answered: (questionData.times_answered || 0) + 1,
         }
@@ -117,6 +124,12 @@ export async function POST(request: NextRequest) {
           .from('questions')
           .update(updates)
           .eq('id', questionId)
+
+        // Only include premium content for paid members
+        if (isPaidMember) {
+          premiumExplanation = questionData.premium_explanation || undefined
+          sources = questionData.sources || undefined
+        }
 
         // Save user answer to user_answers table
         await supabase
@@ -148,6 +161,8 @@ export async function POST(request: NextRequest) {
       streak: newStreak,
       streakBonus,
       explanation: question.explanation,
+      ...(isPaidMember && premiumExplanation && { premium_explanation: premiumExplanation }),
+      ...(isPaidMember && sources && sources.length > 0 && { sources: sources }),
     }
 
     return NextResponse.json(response)

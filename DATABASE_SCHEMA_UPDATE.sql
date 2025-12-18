@@ -132,5 +132,123 @@ ALTER TABLE questions ADD COLUMN IF NOT EXISTS tier TEXT;
 -- Create index on tier for faster lookups
 CREATE INDEX IF NOT EXISTS idx_questions_tier ON questions(tier);
 
+-- 7. Add premium explanation and sources fields to questions table (for paid members feature)
+ALTER TABLE questions ADD COLUMN IF NOT EXISTS premium_explanation TEXT;
+ALTER TABLE questions ADD COLUMN IF NOT EXISTS sources JSONB;
+
+-- Note: sources should be stored as JSON array, e.g.:
+-- [{"text": "Quote from source", "source": "Book name, Chapter:Verse or Page", "commentary": "Additional context"}]
+
+-- 8. Create head_to_head_games table for multiplayer Jeopardy-style games (Pro feature)
+CREATE TABLE IF NOT EXISTS head_to_head_games (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  game_code TEXT UNIQUE NOT NULL, -- 6-character code for joining
+  player1_id UUID REFERENCES auth.users(id) NOT NULL,
+  player2_id UUID REFERENCES auth.users(id),
+  status TEXT DEFAULT 'waiting', -- 'waiting', 'active', 'completed', 'abandoned'
+  current_question_index INTEGER DEFAULT 0,
+  total_questions INTEGER DEFAULT 10, -- Number of questions in the game
+  player1_score INTEGER DEFAULT 0,
+  player2_score INTEGER DEFAULT 0,
+  player1_ready BOOLEAN DEFAULT false,
+  player2_ready BOOLEAN DEFAULT false,
+  created_by UUID REFERENCES auth.users(id) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  started_at TIMESTAMP WITH TIME ZONE,
+  completed_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Enable Row Level Security for head_to_head_games
+ALTER TABLE head_to_head_games ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Players can view their own games
+CREATE POLICY "Players can view own games"
+  ON head_to_head_games FOR SELECT
+  USING (auth.uid() = player1_id OR auth.uid() = player2_id);
+
+-- Policy: Service role can insert/update games (for API routes)
+CREATE POLICY "Service role can manage games"
+  ON head_to_head_games FOR ALL
+  USING (true)
+  WITH CHECK (true);
+
+-- Create indexes for faster lookups
+CREATE INDEX IF NOT EXISTS idx_head_to_head_games_game_code ON head_to_head_games(game_code);
+CREATE INDEX IF NOT EXISTS idx_head_to_head_games_player1_id ON head_to_head_games(player1_id);
+CREATE INDEX IF NOT EXISTS idx_head_to_head_games_player2_id ON head_to_head_games(player2_id);
+CREATE INDEX IF NOT EXISTS idx_head_to_head_games_status ON head_to_head_games(status);
+
+-- 9. Create head_to_head_game_questions table to store questions for each game
+CREATE TABLE IF NOT EXISTS head_to_head_game_questions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  game_id UUID REFERENCES head_to_head_games(id) ON DELETE CASCADE NOT NULL,
+  question_id UUID REFERENCES questions(id) NOT NULL,
+  question_index INTEGER NOT NULL, -- Order of question in game (0-based)
+  category TEXT NOT NULL,
+  points INTEGER NOT NULL, -- Jeopardy-style points (10, 20, 30, 40 based on tier)
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(game_id, question_index)
+);
+
+-- Enable Row Level Security for head_to_head_game_questions
+ALTER TABLE head_to_head_game_questions ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Players can view questions for their games
+CREATE POLICY "Players can view game questions"
+  ON head_to_head_game_questions FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM head_to_head_games
+      WHERE head_to_head_games.id = head_to_head_game_questions.game_id
+      AND (head_to_head_games.player1_id = auth.uid() OR head_to_head_games.player2_id = auth.uid())
+    )
+  );
+
+-- Policy: Service role can insert game questions (for API routes)
+CREATE POLICY "Service role can insert game questions"
+  ON head_to_head_game_questions FOR INSERT
+  WITH CHECK (true);
+
+-- Create indexes
+CREATE INDEX IF NOT EXISTS idx_head_to_head_game_questions_game_id ON head_to_head_game_questions(game_id);
+CREATE INDEX IF NOT EXISTS idx_head_to_head_game_questions_question_id ON head_to_head_game_questions(question_id);
+
+-- 10. Create head_to_head_game_answers table to track player answers
+CREATE TABLE IF NOT EXISTS head_to_head_game_answers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  game_id UUID REFERENCES head_to_head_games(id) ON DELETE CASCADE NOT NULL,
+  question_id UUID REFERENCES questions(id) NOT NULL,
+  user_id UUID REFERENCES auth.users(id) NOT NULL,
+  selected_answer TEXT NOT NULL,
+  correct BOOLEAN NOT NULL,
+  points_earned INTEGER NOT NULL,
+  answered_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(game_id, question_id, user_id) -- One answer per player per question
+);
+
+-- Enable Row Level Security for head_to_head_game_answers
+ALTER TABLE head_to_head_game_answers ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Players can view answers for their games
+CREATE POLICY "Players can view game answers"
+  ON head_to_head_game_answers FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM head_to_head_games
+      WHERE head_to_head_games.id = head_to_head_game_answers.game_id
+      AND (head_to_head_games.player1_id = auth.uid() OR head_to_head_games.player2_id = auth.uid())
+    )
+  );
+
+-- Policy: Players can insert their own answers
+CREATE POLICY "Players can insert own answers"
+  ON head_to_head_game_answers FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+-- Create indexes
+CREATE INDEX IF NOT EXISTS idx_head_to_head_game_answers_game_id ON head_to_head_game_answers(game_id);
+CREATE INDEX IF NOT EXISTS idx_head_to_head_game_answers_user_id ON head_to_head_game_answers(user_id);
+CREATE INDEX IF NOT EXISTS idx_head_to_head_game_answers_question_id ON head_to_head_game_answers(question_id);
+
 
 

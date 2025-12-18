@@ -63,10 +63,157 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: true })
       .limit(100)
 
+    // Get head-to-head game history
+    const { data: gamesAsPlayer1, error: games1Error } = await supabase
+      .from('head_to_head_games')
+      .select(`
+        id,
+        game_code,
+        player1_id,
+        player2_id,
+        status,
+        player1_score,
+        player2_score,
+        completed_at,
+        created_at
+      `)
+      .eq('player1_id', user.id)
+      .eq('status', 'completed')
+      .order('completed_at', { ascending: false })
+
+    const { data: gamesAsPlayer2, error: games2Error } = await supabase
+      .from('head_to_head_games')
+      .select(`
+        id,
+        game_code,
+        player1_id,
+        player2_id,
+        status,
+        player1_score,
+        player2_score,
+        completed_at,
+        created_at
+      `)
+      .eq('player2_id', user.id)
+      .eq('status', 'completed')
+      .order('completed_at', { ascending: false })
+
+    // Get player names separately
+    const allPlayerIds = new Set<string>()
+    if (gamesAsPlayer1) {
+      gamesAsPlayer1.forEach(game => {
+        allPlayerIds.add(game.player1_id)
+        if (game.player2_id) allPlayerIds.add(game.player2_id)
+      })
+    }
+    if (gamesAsPlayer2) {
+      gamesAsPlayer2.forEach(game => {
+        allPlayerIds.add(game.player1_id)
+        if (game.player2_id) allPlayerIds.add(game.player2_id)
+      })
+    }
+
+    const { data: playerProfiles } = await supabase
+      .from('profiles')
+      .select('id, display_name')
+      .in('id', Array.from(allPlayerIds))
+
+    const playerNamesMap = new Map<string, string>()
+    if (playerProfiles) {
+      playerProfiles.forEach(profile => {
+        playerNamesMap.set(profile.id, profile.display_name || 'Unknown Player')
+      })
+    }
+
+    // Combine and process games
+    const allGames = [
+      ...(gamesAsPlayer1 || []).map(game => ({ 
+        ...game, 
+        isPlayer1: true,
+        player1_profile: { display_name: playerNamesMap.get(game.player1_id) || null },
+        player2_profile: game.player2_id ? { display_name: playerNamesMap.get(game.player2_id) || null } : null,
+      })),
+      ...(gamesAsPlayer2 || []).map(game => ({ 
+        ...game, 
+        isPlayer1: false,
+        player1_profile: { display_name: playerNamesMap.get(game.player1_id) || null },
+        player2_profile: game.player2_id ? { display_name: playerNamesMap.get(game.player2_id) || null } : null,
+      })),
+    ].sort((a, b) => {
+      const dateA = new Date(a.completed_at || a.created_at).getTime()
+      const dateB = new Date(b.completed_at || b.created_at).getTime()
+      return dateB - dateA
+    })
+
+    // Calculate records against each opponent
+    const opponentRecords: Record<string, {
+      opponentId: string
+      opponentName: string
+      wins: number
+      losses: number
+      ties: number
+      games: any[]
+    }> = {}
+
+    allGames.forEach(game => {
+      const isPlayer1 = game.isPlayer1
+      const opponentId = isPlayer1 ? game.player2_id : game.player1_id
+      const opponentName = isPlayer1 
+        ? (game.player2_profile?.display_name || playerNamesMap.get(opponentId || '') || 'Player 2')
+        : (game.player1_profile?.display_name || playerNamesMap.get(opponentId || '') || 'Player 1')
+      
+      if (!opponentId) return
+
+      if (!opponentRecords[opponentId]) {
+        opponentRecords[opponentId] = {
+          opponentId,
+          opponentName,
+          wins: 0,
+          losses: 0,
+          ties: 0,
+          games: [],
+        }
+      }
+
+      const myScore = isPlayer1 ? game.player1_score : game.player2_score
+      const opponentScore = isPlayer1 ? game.player2_score : game.player1_score
+
+      if (myScore > opponentScore) {
+        opponentRecords[opponentId].wins++
+      } else if (myScore < opponentScore) {
+        opponentRecords[opponentId].losses++
+      } else {
+        opponentRecords[opponentId].ties++
+      }
+
+      opponentRecords[opponentId].games.push({
+        id: game.id,
+        game_code: game.game_code,
+        myScore,
+        opponentScore,
+        completed_at: game.completed_at,
+        created_at: game.created_at,
+        isPlayer1,
+      })
+    })
+
+    // Convert to array and sort by total games
+    const opponentRecordsArray = Object.values(opponentRecords)
+      .map(record => ({
+        ...record,
+        totalGames: record.wins + record.losses + record.ties,
+        winRate: record.totalGames > 0 
+          ? ((record.wins / record.totalGames) * 100).toFixed(1)
+          : '0.0',
+      }))
+      .sort((a, b) => b.totalGames - a.totalGames)
+
     return NextResponse.json({ 
       profile,
       wrongAnswers: wrongAnswers || [],
       pointsHistory: pointsHistory || [],
+      headToHeadGames: allGames,
+      opponentRecords: opponentRecordsArray,
     })
   } catch (error) {
     console.error('Error fetching profile:', error)

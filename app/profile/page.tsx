@@ -4,7 +4,7 @@ import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { useAuth } from '@/components/AuthProvider'
 import { useEffect, useState } from 'react'
 import { authenticatedFetch } from '@/lib/api-client'
-import { Profile, Tier, Question } from '@/lib/types'
+import { Profile, Tier, Question, QuestionCategory, HeadToHeadGameHistory, OpponentRecord } from '@/lib/types'
 import Link from 'next/link'
 
 interface WrongAnswer {
@@ -25,6 +25,8 @@ interface ProfileData {
   profile: Profile
   wrongAnswers: WrongAnswer[]
   pointsHistory: PointsHistoryEntry[]
+  headToHeadGames?: HeadToHeadGameHistory[]
+  opponentRecords?: OpponentRecord[]
 }
 
 export default function ProfilePage() {
@@ -32,6 +34,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<ProfileData | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [selectedCategory, setSelectedCategory] = useState<QuestionCategory | 'All'>('All')
 
   useEffect(() => {
     if (user) {
@@ -103,6 +106,20 @@ export default function ProfilePage() {
   }
 
   const chartData = getPointsChartData()
+
+  // Filter wrong answers by category
+  const filteredWrongAnswers = data?.wrongAnswers.filter((wrongAnswer) => {
+    if (selectedCategory === 'All') return true
+    return wrongAnswer.questions.category === selectedCategory
+  }) || []
+
+  // Get unique categories from wrong answers
+  const availableCategories = data?.wrongAnswers
+    ? Array.from(new Set(data.wrongAnswers.map(wa => wa.questions.category)))
+        .filter((cat): cat is QuestionCategory => 
+          ['Chumash', 'Tanach', 'Talmud', 'Halacha', 'Jewish History'].includes(cat)
+        )
+    : []
 
   return (
     <ProtectedRoute>
@@ -364,12 +381,247 @@ export default function ProfilePage() {
                 )}
               </div>
 
+              {/* Head-to-Head Games Section */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
+                <h2 className="text-2xl font-semibold mb-6">Head-to-Head Games</h2>
+                
+                {data.opponentRecords && data.opponentRecords.length > 0 ? (
+                  <>
+                  
+                  {/* Overall Stats */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                    <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                      <div className="text-sm text-green-600 dark:text-green-400 mb-1">Total Wins</div>
+                      <div className="text-3xl font-bold text-green-700 dark:text-green-300">
+                        {data.opponentRecords.reduce((sum, r) => sum + r.wins, 0)}
+                      </div>
+                    </div>
+                    <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                      <div className="text-sm text-red-600 dark:text-red-400 mb-1">Total Losses</div>
+                      <div className="text-3xl font-bold text-red-700 dark:text-red-300">
+                        {data.opponentRecords.reduce((sum, r) => sum + r.losses, 0)}
+                      </div>
+                    </div>
+                    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <div className="text-sm text-blue-600 dark:text-blue-400 mb-1">Total Games</div>
+                      <div className="text-3xl font-bold text-blue-700 dark:text-blue-300">
+                        {data.opponentRecords.reduce((sum, r) => sum + r.totalGames, 0)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Records Against Each Friend */}
+                  <div className="space-y-6">
+                    <h3 className="text-xl font-semibold mb-4">Records Against Friends</h3>
+                    {data.opponentRecords.map((record) => (
+                      <div
+                        key={record.opponentId}
+                        className="border border-gray-200 dark:border-gray-700 rounded-lg p-6 bg-gray-50 dark:bg-gray-700/50"
+                      >
+                        <div className="flex items-center justify-between mb-4">
+                          <div>
+                            <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
+                              {record.opponentName || 'Unknown Player'}
+                            </h4>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              {record.totalGames} game{record.totalGames !== 1 ? 's' : ''} played
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                              {record.wins}-{record.losses}
+                              {record.ties > 0 && `-${record.ties}`}
+                            </div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400">
+                              {record.winRate}% win rate
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Win/Loss Breakdown */}
+                        <div className="grid grid-cols-3 gap-4 mb-4">
+                          <div className="text-center p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                            <div className="text-2xl font-bold text-green-700 dark:text-green-300">
+                              {record.wins}
+                            </div>
+                            <div className="text-xs text-green-600 dark:text-green-400">Wins</div>
+                          </div>
+                          <div className="text-center p-3 bg-red-100 dark:bg-red-900/30 rounded-lg">
+                            <div className="text-2xl font-bold text-red-700 dark:text-red-300">
+                              {record.losses}
+                            </div>
+                            <div className="text-xs text-red-600 dark:text-red-400">Losses</div>
+                          </div>
+                          <div className="text-center p-3 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg">
+                            <div className="text-2xl font-bold text-yellow-700 dark:text-yellow-300">
+                              {record.ties}
+                            </div>
+                            <div className="text-xs text-yellow-600 dark:text-yellow-400">Ties</div>
+                          </div>
+                        </div>
+
+                        {/* Recent Games */}
+                        <div className="mt-4">
+                          <h5 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                            Recent Games
+                          </h5>
+                          <div className="space-y-2 max-h-48 overflow-y-auto">
+                            {record.games.slice(0, 5).map((game) => {
+                              const isWin = game.myScore > game.opponentScore
+                              const isTie = game.myScore === game.opponentScore
+                              return (
+                                <div
+                                  key={game.id}
+                                  className={`p-3 rounded-lg border ${
+                                    isWin
+                                      ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                                      : isTie
+                                      ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
+                                      : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                      <span className="text-lg">
+                                        {isWin ? '✅' : isTie ? '🤝' : '❌'}
+                                      </span>
+                                      <div>
+                                        <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                          {game.game_code}
+                                        </div>
+                                        <div className="text-xs text-gray-600 dark:text-gray-400">
+                                          {formatDateShort(game.completed_at || game.created_at)}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="text-right">
+                                      <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                                        {game.myScore} - {game.opponentScore}
+                                      </div>
+                                      <div className="text-xs text-gray-600 dark:text-gray-400">
+                                        {isWin ? 'Win' : isTie ? 'Tie' : 'Loss'}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* All Games List */}
+                  {data.headToHeadGames && data.headToHeadGames.length > 0 && (
+                    <div className="mt-8">
+                      <h3 className="text-xl font-semibold mb-4">All Head-to-Head Games</h3>
+                      <div className="space-y-3 max-h-96 overflow-y-auto">
+                        {data.headToHeadGames.map((game) => {
+                          const isPlayer1 = game.isPlayer1
+                          const myScore = isPlayer1 ? game.player1_score : game.player2_score
+                          const opponentScore = isPlayer1 ? game.player2_score : game.player1_score
+                          const opponentName = isPlayer1
+                            ? (game.player2_profile?.display_name || 'Player 2')
+                            : (game.player1_profile?.display_name || 'Player 1')
+                          const isWin = myScore > opponentScore
+                          const isTie = myScore === opponentScore
+
+                          return (
+                            <div
+                              key={game.id}
+                              className={`p-4 rounded-lg border ${
+                                isWin
+                                  ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                                  : isTie
+                                  ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
+                                  : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <span className="text-2xl">
+                                    {isWin ? '✅' : isTie ? '🤝' : '❌'}
+                                  </span>
+                                  <div>
+                                    <div className="font-semibold text-gray-900 dark:text-white">
+                                      vs {opponentName}
+                                    </div>
+                                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                                      {game.game_code} • {formatDateShort(game.completed_at || game.created_at)}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-lg font-bold text-gray-900 dark:text-white">
+                                    {myScore} - {opponentScore}
+                                  </div>
+                                  <div className="text-xs text-gray-600 dark:text-gray-400">
+                                    {isWin ? 'Win' : isTie ? 'Tie' : 'Loss'}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  </>
+                ) : (
+                  <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                    <div className="text-6xl mb-4">🎮</div>
+                    <p className="text-lg mb-2">No head-to-head games yet</p>
+                    <p className="text-sm mb-4">
+                      Challenge your friends in Jeopardy-style Torah trivia!
+                    </p>
+                    {data.profile.plan === 'pro' && data.profile.subscription_status === 'active' ? (
+                      <Link
+                        href="/head-to-head"
+                        className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                      >
+                        Create Your First Game
+                      </Link>
+                    ) : (
+                      <Link
+                        href="/billing"
+                        className="inline-block px-6 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition-colors"
+                      >
+                        Upgrade to Pro to Play
+                      </Link>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* Wrong Answers Section */}
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
-                <h2 className="text-2xl font-semibold mb-6">Questions You Got Wrong</h2>
-                {data.wrongAnswers.length > 0 ? (
-                  <div className="space-y-4">
-                    {data.wrongAnswers.map((wrongAnswer) => (
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-2xl font-semibold">Questions You Got Wrong</h2>
+                  {data.wrongAnswers.length > 0 && availableCategories.length > 0 && (
+                    <div className="flex items-center gap-3">
+                      <label htmlFor="category-filter" className="text-sm text-gray-600 dark:text-gray-400">
+                        Filter by category:
+                      </label>
+                      <select
+                        id="category-filter"
+                        value={selectedCategory}
+                        onChange={(e) => setSelectedCategory(e.target.value as QuestionCategory | 'All')}
+                        className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      >
+                        <option value="All">All Categories</option>
+                        {availableCategories.map((category) => (
+                          <option key={category} value={category}>
+                            {category}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+                {filteredWrongAnswers.length > 0 ? (
+                  <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 wrong-answers-scroll">
+                    {filteredWrongAnswers.map((wrongAnswer) => (
                       <div
                         key={wrongAnswer.id}
                         className="border border-red-200 dark:border-red-800 rounded-lg p-6 bg-red-50 dark:bg-red-900/20"
@@ -418,6 +670,11 @@ export default function ProfilePage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                ) : data.wrongAnswers.length > 0 ? (
+                  <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                    <p className="text-lg mb-2">No questions found</p>
+                    <p>No wrong answers found for the selected category.</p>
                   </div>
                 ) : (
                   <div className="text-center py-12 text-gray-500 dark:text-gray-400">

@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createServerClient } from '@/lib/supabase'
 
+// Disable body parsing for Stripe webhook
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
 
