@@ -19,6 +19,39 @@ export default function BillingPage() {
   const success = searchParams.get('success')
   const canceled = searchParams.get('canceled')
 
+  const fetchProfile = useCallback(async () => {
+    try {
+      const response = await authenticatedFetch('/api/profile')
+      if (response.ok) {
+        const data = await response.json()
+        setProfile(data.profile)
+      }
+    } catch (error) {
+      console.error('Error fetching profile:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  const autoSyncWithStripe = useCallback(async () => {
+    try {
+      const response = await authenticatedFetch('/api/stripe/manual-sync', {
+        method: 'POST',
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        // Refresh profile after successful sync
+        await fetchProfile()
+      }
+      // Silently ignore if no subscription found - this is normal for free users
+    } catch (error: any) {
+      // Silently ignore errors during auto-sync - don't show to user
+      console.error('Auto-sync with Stripe failed:', error)
+    }
+  }, [fetchProfile])
+
   useEffect(() => {
     if (user) {
       fetchProfile()
@@ -38,20 +71,6 @@ export default function BillingPage() {
       }, 1000)
     }
   }, [success, autoSyncWithStripe, fetchProfile, router])
-
-  const fetchProfile = useCallback(async () => {
-    try {
-      const response = await authenticatedFetch('/api/profile')
-      if (response.ok) {
-        const data = await response.json()
-        setProfile(data.profile)
-      }
-    } catch (error) {
-      console.error('Error fetching profile:', error)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
 
   const handleUpgrade = async () => {
     setCheckoutLoading(true)
@@ -78,25 +97,6 @@ export default function BillingPage() {
       setCheckoutLoading(false)
     }
   }
-
-  const autoSyncWithStripe = useCallback(async () => {
-    try {
-      const response = await authenticatedFetch('/api/stripe/manual-sync', {
-        method: 'POST',
-      })
-
-      const data = await response.json()
-
-      if (response.ok && data.success) {
-        // Refresh profile after successful sync
-        await fetchProfile()
-      }
-      // Silently ignore if no subscription found - this is normal for free users
-    } catch (error: any) {
-      // Silently ignore errors during auto-sync - don't show to user
-      console.error('Auto-sync with Stripe failed:', error)
-    }
-  }, [fetchProfile])
 
   const handleSync = async () => {
     setSyncing(true)
