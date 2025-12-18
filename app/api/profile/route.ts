@@ -199,13 +199,16 @@ export async function GET(request: NextRequest) {
 
     // Convert to array and sort by total games
     const opponentRecordsArray = Object.values(opponentRecords)
-      .map(record => ({
-        ...record,
-        totalGames: record.wins + record.losses + record.ties,
-        winRate: record.totalGames > 0 
-          ? ((record.wins / record.totalGames) * 100).toFixed(1)
-          : '0.0',
-      }))
+      .map(record => {
+        const totalGames = record.wins + record.losses + record.ties
+        return {
+          ...record,
+          totalGames,
+          winRate: totalGames > 0 
+            ? ((record.wins / totalGames) * 100).toFixed(1)
+            : '0.0',
+        }
+      })
       .sort((a, b) => b.totalGames - a.totalGames)
 
     return NextResponse.json({ 
