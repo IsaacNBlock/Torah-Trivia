@@ -13,6 +13,8 @@ function generateGameCode(): string {
   return code
 }
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
   try {
     // Get user from session

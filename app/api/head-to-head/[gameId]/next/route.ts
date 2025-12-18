@@ -3,6 +3,8 @@ import { createServerClient } from '@/lib/supabase'
 import { getUserFromApiRequest } from '@/lib/server-auth'
 import { GameStateResponse } from '@/lib/types'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { gameId: string } }

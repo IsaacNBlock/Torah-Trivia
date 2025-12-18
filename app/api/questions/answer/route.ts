@@ -4,6 +4,8 @@ import { calculatePoints, calculateTier } from '@/lib/utils'
 import { AnswerRequest, AnswerResponse, Tier } from '@/lib/types'
 import { getUserFromApiRequest } from '@/lib/server-auth'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
   try {
     const body: AnswerRequest = await request.json()

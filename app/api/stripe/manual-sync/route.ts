@@ -11,6 +11,8 @@ const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null
  * Manual sync endpoint - Checks Stripe for user's subscription and updates profile
  * This is a fallback if webhooks didn't fire
  */
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
   try {
     // Get user from session

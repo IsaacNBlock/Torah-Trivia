@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, Suspense } from 'react'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { useAuth } from '@/components/AuthProvider'
 import { authenticatedFetch } from '@/lib/api-client'
 import { Profile } from '@/lib/types'
 import { useSearchParams, useRouter } from 'next/navigation'
 
-export default function BillingPage() {
+function BillingContent() {
   const { user } = useAuth()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
@@ -126,20 +126,17 @@ export default function BillingPage() {
 
   if (loading) {
     return (
-      <ProtectedRoute>
-        <main className="min-h-screen p-8">
-          <div className="max-w-4xl mx-auto">
-            <div className="animate-pulse bg-gray-200 dark:bg-gray-700 rounded-lg h-64"></div>
-          </div>
-        </main>
-      </ProtectedRoute>
+      <main className="min-h-screen p-8">
+        <div className="max-w-4xl mx-auto">
+          <div className="animate-pulse bg-gray-200 dark:bg-gray-700 rounded-lg h-64"></div>
+        </div>
+      </main>
     )
   }
 
   const isPro = profile?.plan === 'pro' && profile?.subscription_status === 'active'
 
   return (
-    <ProtectedRoute>
       <main className="min-h-screen p-8 bg-gray-50 dark:bg-gray-900">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-4xl font-bold mb-8 text-gray-900 dark:text-white">
@@ -344,6 +341,21 @@ export default function BillingPage() {
           )}
         </div>
       </main>
+  )
+}
+
+export default function BillingPage() {
+  return (
+    <ProtectedRoute>
+      <Suspense fallback={
+        <main className="min-h-screen p-8 bg-gray-50 dark:bg-gray-900">
+          <div className="max-w-4xl mx-auto">
+            <div className="animate-pulse bg-gray-200 dark:bg-gray-700 rounded-lg h-64"></div>
+          </div>
+        </main>
+      }>
+        <BillingContent />
+      </Suspense>
     </ProtectedRoute>
   )
 }

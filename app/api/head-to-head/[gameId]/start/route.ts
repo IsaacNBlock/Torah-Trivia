@@ -12,6 +12,8 @@ const openai = new OpenAI({
 const CATEGORIES: QuestionCategory[] = ['Chumash', 'Tanach', 'Talmud', 'Halacha', 'Jewish History']
 const TIERS: Tier[] = ['Beginner', 'Student', 'Scholar', 'Chacham']
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { gameId: string } }

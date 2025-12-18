@@ -11,6 +11,8 @@ const openai = new OpenAI({
 
 const DAILY_QUESTION_LIMIT_FREE = 20
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     // Get user from session

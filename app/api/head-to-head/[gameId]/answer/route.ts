@@ -4,6 +4,8 @@ import { getUserFromApiRequest } from '@/lib/server-auth'
 import { SubmitGameAnswerRequest, SubmitGameAnswerResponse } from '@/lib/types'
 import { getTierPoints } from '@/lib/utils'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { gameId: string } }
