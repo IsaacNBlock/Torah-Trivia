@@ -5,9 +5,7 @@ import { getUserFromApiRequest } from '@/lib/server-auth'
 
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY
 
-const stripe = stripeSecretKey ? new Stripe(stripeSecretKey, {
-  apiVersion: '2024-11-20.acacia',
-}) : null
+const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null
 
 /**
  * Manual sync endpoint - Checks Stripe for user's subscription and updates profile

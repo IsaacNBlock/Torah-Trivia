@@ -13,9 +13,7 @@ if (!stripeSecretKey) {
   console.warn('STRIPE_SECRET_KEY not set - Stripe webhooks will not work')
 }
 
-const stripe = stripeSecretKey ? new Stripe(stripeSecretKey, {
-  apiVersion: '2024-11-20.acacia',
-}) : null
+const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null
 
 export async function POST(request: NextRequest) {
   if (!stripe || !webhookSecret) {
