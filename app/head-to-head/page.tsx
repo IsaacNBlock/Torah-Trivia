@@ -243,3 +243,4 @@ export default function HeadToHeadPage() {
     </ProtectedRoute>
   )
 }
+

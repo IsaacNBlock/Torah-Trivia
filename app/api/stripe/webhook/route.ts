@@ -54,8 +54,8 @@ export async function POST(request: NextRequest) {
         const userId = session.metadata?.userId || session.client_reference_id
 
         if (userId && session.mode === 'subscription') {
-          // Only update if it's a subscription checkout
-          const { error } = await supabase
+          // Update profile to Pro
+          const { error: profileError } = await supabase
             .from('profiles')
             .update({
               plan: 'pro',
@@ -63,10 +63,90 @@ export async function POST(request: NextRequest) {
             })
             .eq('id', userId)
 
-          if (error) {
-            console.error('Error updating profile after checkout:', error)
+          if (profileError) {
+            console.error('Error updating profile after checkout:', profileError)
           } else {
             console.log(`Profile updated to Pro for user: ${userId}`)
+          }
+
+          // Update customer metadata with userId if not already set
+          if (session.customer && typeof session.customer === 'string') {
+            try {
+              await stripe.customers.update(session.customer, {
+                metadata: {
+                  userId: userId,
+                  ...(session.metadata || {}),
+                },
+              })
+              console.log(`Customer metadata updated with userId: ${userId}`)
+            } catch (customerError) {
+              console.error('Error updating customer metadata:', customerError)
+            }
+          }
+
+          // If subscription exists, update its metadata
+          if (session.subscription && typeof session.subscription === 'string') {
+            try {
+              await stripe.subscriptions.update(session.subscription, {
+                metadata: {
+                  userId: userId,
+                },
+              })
+              console.log(`Subscription metadata updated with userId: ${userId}`)
+            } catch (subscriptionError) {
+              console.error('Error updating subscription metadata:', subscriptionError)
+            }
+          }
+        }
+        break
+      }
+
+      case 'customer.subscription.created': {
+        const subscription = event.data.object as Stripe.Subscription
+        const userId = subscription.metadata?.userId
+
+        // Try to get userId from customer metadata if not in subscription metadata
+        let userIdToUse = userId
+        if (!userIdToUse && subscription.customer) {
+          try {
+            const customer = typeof subscription.customer === 'string'
+              ? await stripe.customers.retrieve(subscription.customer)
+              : subscription.customer
+            if (!customer.deleted && 'metadata' in customer) {
+              userIdToUse = customer.metadata?.userId
+            }
+          } catch (error) {
+            console.error('Error retrieving customer:', error)
+          }
+        }
+
+        if (userIdToUse && subscription.status === 'active') {
+          // Update subscription metadata if not already set
+          if (!subscription.metadata?.userId) {
+            try {
+              await stripe.subscriptions.update(subscription.id, {
+                metadata: {
+                  userId: userIdToUse,
+                },
+              })
+            } catch (error) {
+              console.error('Error updating subscription metadata:', error)
+            }
+          }
+
+          // Update profile
+          const { error } = await supabase
+            .from('profiles')
+            .update({
+              plan: 'pro',
+              subscription_status: 'active',
+            })
+            .eq('id', userIdToUse)
+
+          if (error) {
+            console.error('Error updating profile after subscription creation:', error)
+          } else {
+            console.log(`Profile updated to Pro for user: ${userIdToUse}`)
           }
         }
         break
@@ -75,19 +155,39 @@ export async function POST(request: NextRequest) {
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription
-        const userId = subscription.metadata?.userId
+        let userId = subscription.metadata?.userId
+
+        // Try to get userId from customer metadata if not in subscription metadata
+        if (!userId && subscription.customer) {
+          try {
+            const customer = typeof subscription.customer === 'string'
+              ? await stripe.customers.retrieve(subscription.customer)
+              : subscription.customer
+            if (!customer.deleted && 'metadata' in customer) {
+              userId = customer.metadata?.userId
+            }
+          } catch (error) {
+            console.error('Error retrieving customer:', error)
+          }
+        }
 
         if (userId) {
           const status =
             subscription.status === 'active' ? 'active' : 'canceled'
 
-          await supabase
+          const { error } = await supabase
             .from('profiles')
             .update({
               plan: status === 'active' ? 'pro' : 'free',
               subscription_status: status,
             })
             .eq('id', userId)
+
+          if (error) {
+            console.error('Error updating profile after subscription update:', error)
+          } else {
+            console.log(`Profile updated for user: ${userId}, status: ${status}`)
+          }
         }
         break
       }
@@ -105,6 +205,7 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
 
 
 

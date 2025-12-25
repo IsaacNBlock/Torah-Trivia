@@ -25,7 +25,31 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3002'
+    // Get app URL from environment variable, or derive from request origin
+    // This ensures it works in production even if NEXT_PUBLIC_APP_URL isn't set
+    const getAppUrl = () => {
+      // First, try environment variable (best practice)
+      if (process.env.NEXT_PUBLIC_APP_URL) {
+        return process.env.NEXT_PUBLIC_APP_URL
+      }
+      
+      // Fall back to request origin (works automatically in production)
+      const origin = request.headers.get('origin') || request.headers.get('host')
+      if (origin) {
+        // Handle both origin (full URL) and host (hostname only) formats
+        if (origin.startsWith('http')) {
+          return origin
+        }
+        // If it's just a hostname, construct the full URL
+        const protocol = request.headers.get('x-forwarded-proto') || 'https'
+        return `${protocol}://${origin}`
+      }
+      
+      // Last resort: localhost (for local development only)
+      return 'http://localhost:3002'
+    }
+    
+    const appUrl = getAppUrl()
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
@@ -63,6 +87,7 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
 
 
 

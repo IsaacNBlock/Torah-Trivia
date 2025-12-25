@@ -33,17 +33,20 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServerClient()
 
-    // Search for customer by email or metadata
+    // Search for customer by email
     const customers = await stripe.customers.list({
       email: user.email || undefined,
-      limit: 10,
+      limit: 100, // Increased limit to find all customers
     })
 
     // Find customer with active subscription that matches this user
     let activeSubscription = null
+    let matchingCustomer = null
+
     for (const customer of customers.data) {
       // Check if customer metadata has this userId
       if (customer.metadata?.userId === user.id) {
+        matchingCustomer = customer
         const subscriptions = await stripe.subscriptions.list({
           customer: customer.id,
           status: 'active',
@@ -66,11 +69,53 @@ export async function POST(request: NextRequest) {
       for (const sub of subscriptions.data) {
         if (sub.metadata?.userId === user.id) {
           activeSubscription = sub
+          matchingCustomer = customer
           break
         }
       }
 
       if (activeSubscription) break
+    }
+
+    // If no subscription found but we found a customer by email with active subscription,
+    // and metadata doesn't have userId, update metadata and use that subscription
+    if (!activeSubscription && customers.data.length > 0 && user.email) {
+      for (const customer of customers.data) {
+        const subscriptions = await stripe.subscriptions.list({
+          customer: customer.id,
+          status: 'active',
+          limit: 1,
+        })
+
+        if (subscriptions.data.length > 0) {
+          // Found an active subscription for a customer with matching email
+          // Update customer and subscription metadata to include userId
+          try {
+            await stripe.customers.update(customer.id, {
+              metadata: {
+                userId: user.id,
+                ...customer.metadata,
+              },
+            })
+            await stripe.subscriptions.update(subscriptions.data[0].id, {
+              metadata: {
+                userId: user.id,
+                ...subscriptions.data[0].metadata,
+              },
+            })
+            activeSubscription = subscriptions.data[0]
+            matchingCustomer = customer
+            console.log(`Updated customer ${customer.id} and subscription metadata with userId: ${user.id}`)
+            break
+          } catch (metadataError) {
+            console.error('Error updating metadata:', metadataError)
+            // Continue to use the subscription anyway
+            activeSubscription = subscriptions.data[0]
+            matchingCustomer = customer
+            break
+          }
+        }
+      }
     }
 
     // Update profile based on subscription status
@@ -98,9 +143,9 @@ export async function POST(request: NextRequest) {
         status: 'active',
       })
     } else {
-      // Check checkout sessions for this user
+      // Check checkout sessions for this user (increase limit to find more recent sessions)
       const sessions = await stripe.checkout.sessions.list({
-        limit: 10,
+        limit: 100,
       })
 
       for (const session of sessions.data) {
@@ -142,6 +187,8 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
+
 
 
 

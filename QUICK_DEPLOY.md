@@ -69,3 +69,4 @@ See `VERCEL_DEPLOYMENT.md` for detailed instructions and troubleshooting.
 
 ## ✅ Checklist
 See `DEPLOYMENT_CHECKLIST.md` for a complete pre-deployment checklist.
+
