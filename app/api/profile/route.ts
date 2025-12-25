@@ -5,45 +5,53 @@ import { getUserFromApiRequest } from '@/lib/server-auth'
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
+  const cacheHeaders = {
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+  }
+
   try {
     // Get user from session
     const user = await getUserFromApiRequest(request)
     if (!user) {
       return NextResponse.json(
         { error: 'Unauthorized - please sign in' },
-        { 
-          status: 401,
-          headers: {
-            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0',
-          },
-        }
+        { status: 401, headers: cacheHeaders }
       )
     }
 
     const supabase = createServerClient()
     
-    // Get user profile
+    // Get user profile - use maybeSingle() to handle case where profile doesn't exist
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', user.id)
-      .single()
+      .maybeSingle()
 
-    if (profileError || !profile) {
+    if (profileError) {
+      console.error('Error fetching profile:', profileError)
       return NextResponse.json(
         { error: 'Profile not found' },
-        { 
-          status: 404,
-          headers: {
-            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0',
-          },
-        }
+        { status: 404, headers: cacheHeaders }
       )
     }
+
+    if (!profile) {
+      console.error('Profile not found for user:', user.id)
+      return NextResponse.json(
+        { error: 'Profile not found' },
+        { status: 404, headers: cacheHeaders }
+      )
+    }
+
+    // Log profile data for debugging
+    console.log(`Profile fetched for user ${user.id}:`, {
+      plan: profile.plan,
+      subscription_status: profile.subscription_status,
+      updated_at: profile.updated_at
+    })
 
     // Get wrong answers (questions user got wrong)
     const { data: wrongAnswers, error: wrongAnswersError } = await supabase
@@ -234,11 +242,7 @@ export async function GET(request: NextRequest) {
       headToHeadGames: allGames,
       opponentRecords: opponentRecordsArray,
     }, {
-      headers: {
-        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
-      },
+      headers: cacheHeaders,
     })
   } catch (error) {
     console.error('Error fetching profile:', error)
@@ -246,11 +250,7 @@ export async function GET(request: NextRequest) {
       { error: 'Failed to fetch profile' },
       { 
         status: 500,
-        headers: {
-          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-        },
+        headers: cacheHeaders,
       }
     )
   }

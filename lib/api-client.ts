@@ -21,11 +21,24 @@ export async function authenticatedFetch(url: string, options: RequestInit = {})
     headers.set('Content-Type', 'application/json')
   }
 
-  return fetch(url, {
+  // Add cache-busting and prevent caching
+  const fetchOptions: RequestInit = {
     ...options,
     headers,
-  })
+    cache: 'no-store', // Prevent browser caching
+  }
+
+  // Add cache-busting query parameter to GET requests
+  if (!options.method || options.method === 'GET') {
+    // Add timestamp to prevent caching
+    const separator = url.includes('?') ? '&' : '?'
+    const cacheBustUrl = `${url}${separator}_t=${Date.now()}`
+    return fetch(cacheBustUrl, fetchOptions)
+  }
+
+  return fetch(url, fetchOptions)
 }
+
 
 
 
