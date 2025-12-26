@@ -46,8 +46,52 @@ export async function POST(
     const player1Id = normalizeId(game.player1_id)
     const player2Id = normalizeId(game.player2_id)
     
-    if (userId !== player1Id && userId !== player2Id) {
-      console.error('Authorization failed:', {
+    console.log('Ready route authorization check:', {
+      rawUserId: user.id,
+      rawPlayer1Id: game.player1_id,
+      rawPlayer2Id: game.player2_id,
+      normalizedUserId: userId,
+      normalizedPlayer1Id: player1Id,
+      normalizedPlayer2Id: player2Id,
+      gameId: game.id,
+      gameStatus: game.status,
+    })
+    
+    // Check if user is player1
+    const isPlayer1 = userId === player1Id
+    
+    // If user is not player1, they must be player2, so player2_id must be set
+    if (!isPlayer1) {
+      if (!game.player2_id) {
+        console.error('Authorization failed: User is not player1 and player2_id is not set', {
+          userId: user.id,
+          gameId: game.id,
+        })
+        return NextResponse.json(
+          { error: 'Cannot mark ready - you are not a player in this game' },
+          { status: 403 }
+        )
+      }
+      
+      // Verify user is actually player2
+      if (userId !== player2Id) {
+        console.error('Authorization failed: User does not match player2_id', {
+          userId,
+          player2Id,
+          rawUserId: user.id,
+          rawPlayer2Id: game.player2_id,
+          gameId: game.id,
+        })
+        return NextResponse.json(
+          { error: 'Unauthorized - you are not a player in this game' },
+          { status: 403 }
+        )
+      }
+    }
+    
+    // If user is not player1 and not player2 (shouldn't happen after above checks, but just in case)
+    if (!isPlayer1 && userId !== player2Id) {
+      console.error('Authorization failed: User is not player1 or player2', {
         userId,
         player1Id,
         player2Id,
@@ -68,8 +112,14 @@ export async function POST(
     }
 
     // Determine which player is marking ready
-    const isPlayer1 = userId === player1Id
     const updateField = isPlayer1 ? 'player1_ready' : 'player2_ready'
+    
+    console.log('Marking player ready:', {
+      isPlayer1,
+      updateField,
+      userId: user.id,
+      gameId: game.id,
+    })
 
     // Update ready status
     const { data: updatedGame, error: updateError } = await supabase

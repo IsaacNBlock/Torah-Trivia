@@ -88,18 +88,24 @@ export default function HeadToHeadGamePage() {
 
   // Mark ready
   const handleReady = async () => {
+    setError(null)
     try {
+      console.log('Marking player ready for game:', gameId)
       const response = await authenticatedFetch(`/api/head-to-head/${gameId}/ready`, {
         method: 'POST',
       })
 
+      const data = await response.json()
+      
       if (!response.ok) {
-        const data = await response.json()
+        console.error('Failed to mark ready:', data)
         throw new Error(data.error || 'Failed to mark ready')
       }
 
+      console.log('Successfully marked ready:', data)
       await fetchGameState()
     } catch (err: any) {
+      console.error('Error marking ready:', err)
       setError(err.message || 'Failed to mark ready')
     }
   }
@@ -294,6 +300,12 @@ export default function HeadToHeadGamePage() {
                   </div>
                 )}
               </div>
+
+              {error && (
+                <div className="mb-4 bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-700 rounded-lg p-4">
+                  <p className="text-red-800 dark:text-red-200">{error}</p>
+                </div>
+              )}
 
               {game.player2_id && (
                 <div className="space-y-4">
