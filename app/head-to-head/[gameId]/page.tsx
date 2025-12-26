@@ -88,14 +88,17 @@ export default function HeadToHeadGamePage() {
 
   // Mark ready
   const handleReady = async () => {
+    console.log('handleReady called!', { gameId, user: user?.id })
     setError(null)
     try {
-      console.log('Marking player ready for game:', gameId)
+      console.log('Marking player ready for game:', gameId, 'User:', user?.id)
       const response = await authenticatedFetch(`/api/head-to-head/${gameId}/ready`, {
         method: 'POST',
       })
 
       const data = await response.json()
+      
+      console.log('Ready response:', { ok: response.ok, status: response.status, data })
       
       if (!response.ok) {
         console.error('Failed to mark ready:', data)
@@ -231,7 +234,28 @@ export default function HeadToHeadGamePage() {
 
   if (!game) return null
 
-  const isPlayer1 = game.player1_id === user?.id
+  // Normalize IDs for comparison (handle case differences and whitespace)
+  const normalizeId = (id: any): string | null => {
+    if (!id) return null
+    return String(id).trim().toLowerCase()
+  }
+  
+  const userId = normalizeId(user?.id)
+  const player1Id = normalizeId(game.player1_id)
+  const player2Id = normalizeId(game.player2_id)
+  
+  const isPlayer1 = userId === player1Id
+  
+  console.log('Player check:', {
+    rawUserId: user?.id,
+    rawPlayer1Id: game.player1_id,
+    rawPlayer2Id: game.player2_id,
+    normalizedUserId: userId,
+    normalizedPlayer1Id: player1Id,
+    normalizedPlayer2Id: player2Id,
+    isPlayer1,
+  })
+  
   const currentPlayerName = isPlayer1 ? game.player1_name : game.player2_name
   const opponentName = isPlayer1 ? game.player2_name : game.player1_name
   const currentPlayerScore = isPlayer1 ? game.player1_score : game.player2_score
@@ -266,7 +290,7 @@ export default function HeadToHeadGamePage() {
                       {game.player1_name || 'Player 1'}
                     </p>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {game.player1_id === user?.id ? '(You)' : ''}
+                      {isPlayer1 ? '(You)' : ''}
                     </p>
                   </div>
                   {game.player1_ready && (
@@ -283,7 +307,7 @@ export default function HeadToHeadGamePage() {
                         {game.player2_name || 'Player 2'}
                       </p>
                       <p className="text-sm text-gray-600 dark:text-gray-400">
-                        {game.player2_id === user?.id ? '(You)' : ''}
+                        {!isPlayer1 ? '(You)' : ''}
                       </p>
                     </div>
                     {game.player2_ready && (
@@ -307,20 +331,42 @@ export default function HeadToHeadGamePage() {
                 </div>
               )}
 
+              {/* Debug info - remove after testing */}
+              {process.env.NODE_ENV === 'development' && (
+                <div className="mb-4 bg-gray-100 dark:bg-gray-700 rounded-lg p-4 text-xs">
+                  <p>Debug: isPlayer1={String(isPlayer1)}, player1_ready={String(game.player1_ready)}, player2_ready={String(game.player2_ready)}, player2_id={game.player2_id ? 'set' : 'null'}</p>
+                  <p>User ID: {user?.id}</p>
+                  <p>Player1 ID: {game.player1_id}</p>
+                  <p>Player2 ID: {game.player2_id || 'null'}</p>
+                </div>
+              )}
+
               {game.player2_id && (
                 <div className="space-y-4">
                   {!isPlayer1 && !game.player2_ready && (
                     <button
-                      onClick={handleReady}
-                      className="w-full py-3 bg-green-600 text-white rounded-lg font-semibold text-lg hover:bg-green-700 transition-colors"
+                      type="button"
+                      onClick={(e) => {
+                        console.log('Ready button clicked!', { isPlayer1, player2Ready: game.player2_ready, gameId, userId: user?.id })
+                        e.preventDefault()
+                        e.stopPropagation()
+                        handleReady()
+                      }}
+                      className="w-full py-3 bg-green-600 text-white rounded-lg font-semibold text-lg hover:bg-green-700 transition-colors cursor-pointer"
                     >
                       I&apos;m Ready
                     </button>
                   )}
                   {isPlayer1 && !game.player1_ready && (
                     <button
-                      onClick={handleReady}
-                      className="w-full py-3 bg-green-600 text-white rounded-lg font-semibold text-lg hover:bg-green-700 transition-colors"
+                      type="button"
+                      onClick={(e) => {
+                        console.log('Ready button clicked!', { isPlayer1, player1Ready: game.player1_ready, gameId, userId: user?.id })
+                        e.preventDefault()
+                        e.stopPropagation()
+                        handleReady()
+                      }}
+                      className="w-full py-3 bg-green-600 text-white rounded-lg font-semibold text-lg hover:bg-green-700 transition-colors cursor-pointer"
                     >
                       I&apos;m Ready
                     </button>
