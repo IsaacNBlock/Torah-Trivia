@@ -89,9 +89,10 @@ export default function HeadToHeadPage() {
         throw new Error('Failed to join game - player2_id not set')
       }
 
-      // Add a small delay to ensure database update is committed before redirecting
+      // Add a delay to ensure database update is committed and replicated before redirecting
       // This helps avoid race conditions where the GET request happens before the update is visible
-      await new Promise(resolve => setTimeout(resolve, 500))
+      // Increased to 1500ms to account for Supabase read replica lag
+      await new Promise(resolve => setTimeout(resolve, 1500))
 
       // Redirect to game page
       router.push(`/head-to-head/${data.game.id}`)
