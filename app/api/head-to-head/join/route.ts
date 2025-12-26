@@ -143,9 +143,32 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const response: JoinGameResponse = {
-      game: updatedGame,
+    // Re-fetch the game to ensure we have the latest data (handles any potential caching)
+    const { data: finalGame } = await supabase
+      .from('head_to_head_games')
+      .select('*')
+      .eq('id', game.id)
+      .single()
+
+    if (!finalGame || normalizeId(finalGame.player2_id) !== normalizeId(user.id)) {
+      console.error('Final verification failed after re-fetch:', {
+        gameId: game.id,
+        userId: user.id,
+        finalGamePlayer2Id: finalGame?.player2_id,
+      })
+      // Still return the updatedGame we got earlier, as it should be correct
     }
+
+    const response: JoinGameResponse = {
+      game: finalGame || updatedGame,
+    }
+
+    console.log('Join successful, returning game:', {
+      gameId: response.game.id,
+      player1Id: response.game.player1_id,
+      player2Id: response.game.player2_id,
+      userId: user.id,
+    })
 
     return NextResponse.json(response)
   } catch (error) {

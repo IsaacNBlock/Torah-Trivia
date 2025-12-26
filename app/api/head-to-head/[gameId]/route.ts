@@ -29,7 +29,7 @@ export async function GET(
     const supabase = createServerClient()
     const gameId = params.gameId
 
-    // Get the game
+    // Get the game - fetch fresh data (no cache)
     const { data: game, error: gameError } = await supabase
       .from('head_to_head_games')
       .select('*')
@@ -42,6 +42,30 @@ export async function GET(
         { error: 'Game not found' },
         { status: 404 }
       )
+    }
+    
+    // If player2_id is null but user is trying to access, check if they just joined
+    // This handles race conditions where the join update hasn't propagated yet
+    if (!game.player2_id) {
+      console.log('Game found but player2_id is null, checking if user just joined...')
+      // Wait a bit and re-fetch to see if player2_id was just set
+      await new Promise(resolve => setTimeout(resolve, 300))
+      const { data: refreshedGame } = await supabase
+        .from('head_to_head_games')
+        .select('*')
+        .eq('id', gameId)
+        .single()
+      
+      if (refreshedGame) {
+        console.log('Refreshed game data:', {
+          originalPlayer2Id: game.player2_id,
+          refreshedPlayer2Id: refreshedGame.player2_id,
+        })
+        // Use refreshed data if available
+        if (refreshedGame.player2_id) {
+          Object.assign(game, refreshedGame)
+        }
+      }
     }
 
     console.log('Fetched game from DB:', {

@@ -84,6 +84,15 @@ export default function HeadToHeadPage() {
         throw new Error(data.error || 'Failed to join game')
       }
 
+      // Verify the join was successful by checking player2_id
+      if (!data.game.player2_id) {
+        throw new Error('Failed to join game - player2_id not set')
+      }
+
+      // Add a small delay to ensure database update is committed before redirecting
+      // This helps avoid race conditions where the GET request happens before the update is visible
+      await new Promise(resolve => setTimeout(resolve, 500))
+
       // Redirect to game page
       router.push(`/head-to-head/${data.game.id}`)
     } catch (err: any) {
@@ -243,4 +252,5 @@ export default function HeadToHeadPage() {
     </ProtectedRoute>
   )
 }
+
 
