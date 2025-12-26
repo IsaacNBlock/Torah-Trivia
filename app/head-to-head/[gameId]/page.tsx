@@ -346,13 +346,28 @@ export default function HeadToHeadGamePage() {
                   {!isPlayer1 && !game.player2_ready && (
                     <button
                       type="button"
-                      onClick={(e) => {
-                        console.log('Ready button clicked!', { isPlayer1, player2Ready: game.player2_ready, gameId, userId: user?.id })
+                      onClick={async (e) => {
                         e.preventDefault()
                         e.stopPropagation()
-                        handleReady()
+                        console.log('=== READY BUTTON CLICKED ===')
+                        console.log('Event:', e)
+                        console.log('isPlayer1:', isPlayer1)
+                        console.log('player2Ready:', game.player2_ready)
+                        console.log('gameId:', gameId)
+                        console.log('userId:', user?.id)
+                        console.log('game:', game)
+                        try {
+                          await handleReady()
+                        } catch (error) {
+                          console.error('Error in button click handler:', error)
+                          alert('Error: ' + (error as Error).message)
+                        }
+                      }}
+                      onMouseDown={(e) => {
+                        console.log('Button mousedown event', e)
                       }}
                       className="w-full py-3 bg-green-600 text-white rounded-lg font-semibold text-lg hover:bg-green-700 transition-colors cursor-pointer"
+                      style={{ pointerEvents: 'auto', zIndex: 10 }}
                     >
                       I&apos;m Ready
                     </button>
@@ -360,13 +375,27 @@ export default function HeadToHeadGamePage() {
                   {isPlayer1 && !game.player1_ready && (
                     <button
                       type="button"
-                      onClick={(e) => {
-                        console.log('Ready button clicked!', { isPlayer1, player1Ready: game.player1_ready, gameId, userId: user?.id })
+                      onClick={async (e) => {
                         e.preventDefault()
                         e.stopPropagation()
-                        handleReady()
+                        console.log('=== READY BUTTON CLICKED (Player 1) ===')
+                        console.log('Event:', e)
+                        console.log('isPlayer1:', isPlayer1)
+                        console.log('player1Ready:', game.player1_ready)
+                        console.log('gameId:', gameId)
+                        console.log('userId:', user?.id)
+                        try {
+                          await handleReady()
+                        } catch (error) {
+                          console.error('Error in button click handler:', error)
+                          alert('Error: ' + (error as Error).message)
+                        }
+                      }}
+                      onMouseDown={(e) => {
+                        console.log('Button mousedown event', e)
                       }}
                       className="w-full py-3 bg-green-600 text-white rounded-lg font-semibold text-lg hover:bg-green-700 transition-colors cursor-pointer"
+                      style={{ pointerEvents: 'auto', zIndex: 10 }}
                     >
                       I&apos;m Ready
                     </button>

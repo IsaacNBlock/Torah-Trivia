@@ -140,12 +140,12 @@ export async function GET(
 
     // Verify user is a player in this game
     // Recompute player IDs after retry loop (game object might have been updated)
-    const finalPlayer1Id = normalizeId(game.player1_id)
-    const finalPlayer2Id = normalizeId(game.player2_id)
+    let finalPlayer1Id = normalizeId(game.player1_id)
+    let finalPlayer2Id = normalizeId(game.player2_id)
     
     // Also do direct string comparison (case-insensitive) in case normalization doesn't work
     const directMatchPlayer1 = game.player1_id && String(user.id).toLowerCase().trim() === String(game.player1_id).toLowerCase().trim()
-    const directMatchPlayer2 = game.player2_id && String(user.id).toLowerCase().trim() === String(game.player2_id).toLowerCase().trim()
+    let directMatchPlayer2 = game.player2_id && String(user.id).toLowerCase().trim() === String(game.player2_id).toLowerCase().trim()
     
     // Check if user might have just joined but the update isn't visible yet
     // This is a workaround for read replica lag or RLS issues
@@ -169,9 +169,10 @@ export async function GET(
         })
         // Update the game object with the found player2_id
         game.player2_id = directGameCheck.player2_id
-        // Recompute player2Id
-        const verifiedPlayer2Id = normalizeId(directGameCheck.player2_id)
-        if (userId === verifiedPlayer2Id) {
+        // Recompute player2Id and directMatchPlayer2 after updating game object
+        finalPlayer2Id = normalizeId(directGameCheck.player2_id)
+        directMatchPlayer2 = String(user.id).toLowerCase().trim() === String(directGameCheck.player2_id).toLowerCase().trim()
+        if (userId === finalPlayer2Id || directMatchPlayer2) {
           console.log('Verified: User is player2 via direct query')
           allowAccessAsWorkaround = true
         }

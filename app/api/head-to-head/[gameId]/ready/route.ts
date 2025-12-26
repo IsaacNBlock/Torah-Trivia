@@ -21,30 +21,75 @@ export async function POST(
     const supabase = createServerClient()
     const gameId = params.gameId
 
-    // Get the game
-    const { data: game, error: gameError } = await supabase
-      .from('head_to_head_games')
-      .select('*')
-      .eq('id', gameId)
-      .single()
+    // Verify user is a player in this game
+    // Normalize UUIDs for comparison (handle case differences, whitespace, and hyphens)
+    // Match the normalization used in the GET route for consistency
+    const normalizeId = (id: any): string | null => {
+      if (!id) return null
+      return String(id).trim().toLowerCase().replace(/-/g, '')
+    }
+    
+    const userId = normalizeId(user.id)
+
+    // Get the game - with retry logic to handle read replica lag
+    let game = null
+    let gameError = null
+    const maxRetries = 3
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      const result = await supabase
+        .from('head_to_head_games')
+        .select('*')
+        .eq('id', gameId)
+        .single()
+      
+      game = result.data
+      gameError = result.error
+      
+      if (!gameError && game) {
+        // Check if player2_id is set and matches, or if user is player1
+        const player1Id = normalizeId(game.player1_id)
+        const player2Id = normalizeId(game.player2_id)
+        const isPlayer1 = userId === player1Id
+        
+        // If user is player1, we're good
+        if (isPlayer1) break
+        
+        // If user is player2 and player2_id is set and matches, we're good
+        if (player2Id && userId === player2Id) break
+        
+        // If player2_id is null and user is not player1, try direct query
+        if (!game.player2_id && !isPlayer1 && attempt < maxRetries - 1) {
+          const { data: directCheck } = await supabase
+            .from('head_to_head_games')
+            .select('player2_id')
+            .eq('id', gameId)
+            .eq('player2_id', user.id)
+            .single()
+          
+          if (directCheck?.player2_id) {
+            game.player2_id = directCheck.player2_id
+            break
+          }
+        }
+      }
+      
+      if (game) break
+      if (attempt < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, 300 * (attempt + 1)))
+      }
+    }
 
     if (gameError || !game) {
+      console.error('Game not found after retries:', gameError)
       return NextResponse.json(
         { error: 'Game not found' },
         { status: 404 }
       )
     }
-
-    // Verify user is a player in this game
-    // Normalize UUIDs for comparison (handle case differences and whitespace)
-    const normalizeId = (id: any): string | null => {
-      if (!id) return null
-      return String(id).trim().toLowerCase()
-    }
     
-    const userId = normalizeId(user.id)
     const player1Id = normalizeId(game.player1_id)
-    const player2Id = normalizeId(game.player2_id)
+    let player2Id = normalizeId(game.player2_id)
     
     console.log('Ready route authorization check:', {
       rawUserId: user.id,
@@ -60,47 +105,50 @@ export async function POST(
     // Check if user is player1
     const isPlayer1 = userId === player1Id
     
-    // If user is not player1, they must be player2, so player2_id must be set
+    // If user is not player1, they must be player2
     if (!isPlayer1) {
+      // If player2_id is still null after retries, try one more direct query
       if (!game.player2_id) {
-        console.error('Authorization failed: User is not player1 and player2_id is not set', {
-          userId: user.id,
-          gameId: game.id,
-        })
-        return NextResponse.json(
-          { error: 'Cannot mark ready - you are not a player in this game' },
-          { status: 403 }
-        )
+        const { data: directCheck } = await supabase
+          .from('head_to_head_games')
+          .select('player2_id')
+          .eq('id', gameId)
+          .eq('player2_id', user.id)
+          .single()
+        
+        if (directCheck?.player2_id) {
+          game.player2_id = directCheck.player2_id
+          player2Id = normalizeId(directCheck.player2_id)
+        } else {
+          console.error('Authorization failed: User is not player1 and player2_id is not set', {
+            userId: user.id,
+            gameId: game.id,
+          })
+          return NextResponse.json(
+            { error: 'Cannot mark ready - you are not a player in this game' },
+            { status: 403 }
+          )
+        }
       }
       
       // Verify user is actually player2
       if (userId !== player2Id) {
-        console.error('Authorization failed: User does not match player2_id', {
-          userId,
-          player2Id,
-          rawUserId: user.id,
-          rawPlayer2Id: game.player2_id,
-          gameId: game.id,
-        })
-        return NextResponse.json(
-          { error: 'Unauthorized - you are not a player in this game' },
-          { status: 403 }
-        )
+        // Also try direct string comparison as fallback
+        const directMatch = String(user.id).toLowerCase().trim() === String(game.player2_id).toLowerCase().trim()
+        if (!directMatch) {
+          console.error('Authorization failed: User does not match player2_id', {
+            userId,
+            player2Id,
+            rawUserId: user.id,
+            rawPlayer2Id: game.player2_id,
+            gameId: game.id,
+          })
+          return NextResponse.json(
+            { error: 'Unauthorized - you are not a player in this game' },
+            { status: 403 }
+          )
+        }
       }
-    }
-    
-    // If user is not player1 and not player2 (shouldn't happen after above checks, but just in case)
-    if (!isPlayer1 && userId !== player2Id) {
-      console.error('Authorization failed: User is not player1 or player2', {
-        userId,
-        player1Id,
-        player2Id,
-        gameId: game.id,
-      })
-      return NextResponse.json(
-        { error: 'Unauthorized - you are not a player in this game' },
-        { status: 403 }
-      )
     }
 
     // Check if game is in waiting status
