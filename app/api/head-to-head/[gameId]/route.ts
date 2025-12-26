@@ -38,9 +38,18 @@ export async function GET(
 
     // Verify user is a player in this game
     // Convert to strings for comparison to handle UUID type differences
-    const userId = String(user.id)
-    const player1Id = game.player1_id ? String(game.player1_id) : null
-    const player2Id = game.player2_id ? String(game.player2_id) : null
+    const userId = String(user.id).trim()
+    const player1Id = game.player1_id ? String(game.player1_id).trim() : null
+    const player2Id = game.player2_id ? String(game.player2_id).trim() : null
+    
+    console.log('Authorization check:', {
+      userId,
+      player1Id,
+      player2Id,
+      gameId: game.id,
+      userMatchesPlayer1: userId === player1Id,
+      userMatchesPlayer2: userId === player2Id,
+    })
     
     if (userId !== player1Id && userId !== player2Id) {
       console.error('Authorization failed:', {
@@ -48,6 +57,9 @@ export async function GET(
         player1Id,
         player2Id,
         gameId: game.id,
+        userIdType: typeof user.id,
+        player1IdType: typeof game.player1_id,
+        player2IdType: typeof game.player2_id,
       })
       return NextResponse.json(
         { error: 'Unauthorized - you are not a player in this game' },

@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user is trying to join their own game
-    if (game.player1_id === user.id) {
+    if (String(game.player1_id).trim() === String(user.id).trim()) {
       return NextResponse.json(
         { error: 'You cannot join your own game.' },
         { status: 400 }
@@ -89,6 +89,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Join the game as player 2
+    console.log('Joining game:', {
+      gameId: game.id,
+      userId: user.id,
+      userIdType: typeof user.id,
+      currentPlayer1Id: game.player1_id,
+      currentPlayer2Id: game.player2_id,
+    })
+
     const { data: updatedGame, error: updateError } = await supabase
       .from('head_to_head_games')
       .update({
@@ -106,11 +114,22 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    console.log('Game updated successfully:', {
+      gameId: updatedGame.id,
+      player1Id: updatedGame.player1_id,
+      player2Id: updatedGame.player2_id,
+      player2IdType: typeof updatedGame.player2_id,
+      userId: user.id,
+      userIdType: typeof user.id,
+    })
+
     // Verify the update persisted correctly
-    if (String(updatedGame.player2_id) !== String(user.id)) {
+    if (String(updatedGame.player2_id).trim() !== String(user.id).trim()) {
       console.error('Join verification failed:', {
         expectedUserId: user.id,
+        expectedUserIdType: typeof user.id,
         actualPlayer2Id: updatedGame.player2_id,
+        actualPlayer2IdType: typeof updatedGame.player2_id,
         gameId: game.id,
       })
       return NextResponse.json(
