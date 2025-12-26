@@ -26,100 +26,46 @@ export async function GET(
       userObject: JSON.stringify(user),
     })
 
+    const supabase = createServerClient()
     const gameId = params.gameId
 
-    // Normalize function for ID comparison
-    const normalizeId = (id: any): string | null => {
-      if (!id) return null
-      return String(id).trim().toLowerCase().replace(/-/g, '')
-    }
-    const userId = normalizeId(user.id)
+    // Get the game - fetch fresh data (no cache)
+    const { data: game, error: gameError } = await supabase
+      .from('head_to_head_games')
+      .select('*')
+      .eq('id', gameId)
+      .single()
 
-    // Get the game - with retry logic to handle race conditions
-    // Create a fresh client for each attempt to avoid connection pooling issues
-    let game = null
-    let gameError = null
-    const maxRetries = 5
-    const baseDelay = 300 // Start with 300ms
+    if (gameError || !game) {
+      console.error('Game fetch error:', gameError)
+      return NextResponse.json(
+        { error: 'Game not found' },
+        { status: 404 }
+      )
+    }
     
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      // Create a fresh Supabase client for each attempt to ensure we're not hitting cached connections
-      const supabase = createServerClient()
-      
-      const result = await supabase
+    // If player2_id is null but user is trying to access, check if they just joined
+    // This handles race conditions where the join update hasn't propagated yet
+    if (!game.player2_id) {
+      console.log('Game found but player2_id is null, checking if user just joined...')
+      // Wait a bit and re-fetch to see if player2_id was just set
+      await new Promise(resolve => setTimeout(resolve, 300))
+      const { data: refreshedGame } = await supabase
         .from('head_to_head_games')
         .select('*')
         .eq('id', gameId)
         .single()
       
-      game = result.data
-      gameError = result.error
-      
-      if (gameError && gameError.code !== 'PGRST116') {
-        // Real error, not just "not found"
-        console.error(`Game fetch error on attempt ${attempt + 1}:`, gameError)
-        break
-      }
-      
-      if (!game) {
-        console.error(`Game not found on attempt ${attempt + 1}:`, gameError)
-        if (attempt < maxRetries - 1) {
-          await new Promise(resolve => setTimeout(resolve, baseDelay * (attempt + 1)))
-          continue
-        }
-        return NextResponse.json(
-          { error: 'Game not found' },
-          { status: 404 }
-        )
-      }
-      
-      const player1Id = normalizeId(game.player1_id)
-      
-      // If user is player1, player2_id being null is fine - they're waiting for player2
-      if (userId === player1Id) {
-        console.log(`Attempt ${attempt + 1}: User is player1, player2_id being null is expected`)
-        break
-      }
-      
-      // If player2_id is set, we're good
-      if (game.player2_id) {
-        const player2Id = normalizeId(game.player2_id)
-        if (userId === player2Id) {
-          console.log(`Attempt ${attempt + 1}: Game fetched successfully, player2_id is set and matches user`)
-          break
-        } else {
-          console.log(`Attempt ${attempt + 1}: player2_id is set but doesn't match user`, {
-            userId,
-            player2Id,
-            rawPlayer2Id: game.player2_id,
-          })
-          // This user is not authorized - break and let authorization check handle it
-          break
-        }
-      }
-      
-      // User is not player1 and player2_id is null - might be a race condition
-      if (attempt < maxRetries - 1) {
-        const delay = baseDelay * (attempt + 1) // Exponential backoff: 300ms, 600ms, 900ms, 1200ms
-        console.log(`Attempt ${attempt + 1}: Game found but player2_id is null for user ${user.id}, retrying in ${delay}ms...`)
-        await new Promise(resolve => setTimeout(resolve, delay))
-      } else {
-        console.error(`Max retries (${maxRetries}) reached, player2_id still null:`, {
-          gameId: game.id,
-          userId: user.id,
-          player1Id: game.player1_id,
-          player2Id: game.player2_id,
-          attempts: maxRetries,
+      if (refreshedGame) {
+        console.log('Refreshed game data:', {
+          originalPlayer2Id: game.player2_id,
+          refreshedPlayer2Id: refreshedGame.player2_id,
         })
+        // Use refreshed data if available
+        if (refreshedGame.player2_id) {
+          Object.assign(game, refreshedGame)
+        }
       }
-    }
-    
-    if (gameError || !game) {
-      console.error('Game fetch error after retries:', gameError)
-      return NextResponse.json(
-        { error: 'Game not found' },
-        { status: 404 }
-      )
     }
 
     console.log('Fetched game from DB:', {
