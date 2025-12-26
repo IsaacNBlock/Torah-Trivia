@@ -186,9 +186,8 @@ export default function HeadToHeadGamePage() {
 
     // Set up polling for game state updates
     const interval = setInterval(() => {
-      if (gameView === 'waiting' || gameView === 'playing') {
-        fetchGameState()
-      }
+      // Always fetch if we're still on this page - let the fetchGameState determine the view
+      fetchGameState()
     }, 2000) // Poll every 2 seconds
 
     setPollingInterval(interval)
@@ -196,7 +195,7 @@ export default function HeadToHeadGamePage() {
     return () => {
       if (interval) clearInterval(interval)
     }
-  }, [gameId, user, gameView, fetchGameState])
+  }, [gameId, user, fetchGameState])
 
   if (loading && !game) {
     return (
@@ -338,6 +337,8 @@ export default function HeadToHeadGamePage() {
                   <p>User ID: {user?.id}</p>
                   <p>Player1 ID: {game.player1_id}</p>
                   <p>Player2 ID: {game.player2_id || 'null'}</p>
+                  <p>Button conditions: game.player2_id={game.player2_id ? 'true' : 'false'}, !isPlayer1={String(!isPlayer1)}, !game.player2_ready={String(!game.player2_ready)}</p>
+                  <p>Should show button: {String(game.player2_id && !isPlayer1 && !game.player2_ready)}</p>
                 </div>
               )}
 
@@ -349,13 +350,14 @@ export default function HeadToHeadGamePage() {
                       onClick={async (e) => {
                         e.preventDefault()
                         e.stopPropagation()
-                        console.log('=== READY BUTTON CLICKED ===')
+                        console.log('=== READY BUTTON CLICKED (PLAYER 2) ===')
                         console.log('Event:', e)
                         console.log('isPlayer1:', isPlayer1)
                         console.log('player2Ready:', game.player2_ready)
                         console.log('gameId:', gameId)
                         console.log('userId:', user?.id)
-                        console.log('game:', game)
+                        console.log('game:', JSON.stringify(game, null, 2))
+                        alert('Button clicked! Check console for details.')
                         try {
                           await handleReady()
                         } catch (error) {
@@ -364,13 +366,23 @@ export default function HeadToHeadGamePage() {
                         }
                       }}
                       onMouseDown={(e) => {
-                        console.log('Button mousedown event', e)
+                        console.log('Button mousedown event (PLAYER 2)', e)
+                      }}
+                      onMouseEnter={() => {
+                        console.log('Button mouse enter (PLAYER 2)')
                       }}
                       className="w-full py-3 bg-green-600 text-white rounded-lg font-semibold text-lg hover:bg-green-700 transition-colors cursor-pointer"
-                      style={{ pointerEvents: 'auto', zIndex: 10 }}
+                      style={{ pointerEvents: 'auto', zIndex: 10, position: 'relative' }}
                     >
                       I&apos;m Ready
                     </button>
+                  )}
+                  {!isPlayer1 && game.player2_ready && (
+                    <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                      <p className="text-center text-green-800 dark:text-green-200">
+                        You are ready! Waiting for opponent...
+                      </p>
+                    </div>
                   )}
                   {isPlayer1 && !game.player1_ready && (
                     <button
@@ -378,12 +390,14 @@ export default function HeadToHeadGamePage() {
                       onClick={async (e) => {
                         e.preventDefault()
                         e.stopPropagation()
-                        console.log('=== READY BUTTON CLICKED (Player 1) ===')
+                        console.log('=== READY BUTTON CLICKED (PLAYER 1) ===')
                         console.log('Event:', e)
                         console.log('isPlayer1:', isPlayer1)
                         console.log('player1Ready:', game.player1_ready)
                         console.log('gameId:', gameId)
                         console.log('userId:', user?.id)
+                        console.log('game:', JSON.stringify(game, null, 2))
+                        alert('Button clicked! Check console for details.')
                         try {
                           await handleReady()
                         } catch (error) {
@@ -392,13 +406,23 @@ export default function HeadToHeadGamePage() {
                         }
                       }}
                       onMouseDown={(e) => {
-                        console.log('Button mousedown event', e)
+                        console.log('Button mousedown event (PLAYER 1)', e)
+                      }}
+                      onMouseEnter={() => {
+                        console.log('Button mouse enter (PLAYER 1)')
                       }}
                       className="w-full py-3 bg-green-600 text-white rounded-lg font-semibold text-lg hover:bg-green-700 transition-colors cursor-pointer"
-                      style={{ pointerEvents: 'auto', zIndex: 10 }}
+                      style={{ pointerEvents: 'auto', zIndex: 10, position: 'relative' }}
                     >
                       I&apos;m Ready
                     </button>
+                  )}
+                  {isPlayer1 && game.player1_ready && !game.player2_ready && (
+                    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                      <p className="text-center text-blue-800 dark:text-blue-200">
+                        You are ready! Waiting for {game.player2_name || 'opponent'} to be ready...
+                      </p>
+                    </div>
                   )}
                   {game.player1_ready && game.player2_ready && isPlayer1 && (
                     <button
