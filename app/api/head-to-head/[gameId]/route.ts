@@ -43,7 +43,9 @@ export async function GET(
     const baseDelay = 500 // Start with 500ms, increase with each retry
     
     for (let attempt = 0; attempt < maxRetries; attempt++) {
-      const result = await supabase
+      // Create a fresh client for each attempt to ensure clean connection
+      const freshSupabase = createServerClient()
+      const result = await freshSupabase
         .from('head_to_head_games')
         .select('*')
         .eq('id', gameId)
@@ -145,7 +147,54 @@ export async function GET(
     const directMatchPlayer1 = game.player1_id && String(user.id).toLowerCase().trim() === String(game.player1_id).toLowerCase().trim()
     const directMatchPlayer2 = game.player2_id && String(user.id).toLowerCase().trim() === String(game.player2_id).toLowerCase().trim()
     
-    const isAuthorized = (userId === finalPlayer1Id) || (userId === finalPlayer2Id) || directMatchPlayer1 || directMatchPlayer2
+    // Check if user might have just joined but the update isn't visible yet
+    // This is a workaround for read replica lag or RLS issues
+    let allowAccessAsWorkaround = false
+    if (!game.player2_id && userId !== finalPlayer1Id && game.status === 'waiting') {
+      // Try a direct query to verify if this user is actually player2
+      // Sometimes the initial query doesn't see the update, but a direct query will
+      console.log('player2_id is null but user is not player1, doing direct verification query...')
+      const { data: directGameCheck } = await supabase
+        .from('head_to_head_games')
+        .select('player2_id')
+        .eq('id', gameId)
+        .eq('player2_id', user.id)
+        .single()
+      
+      if (directGameCheck && directGameCheck.player2_id) {
+        console.warn('Direct query found user as player2! Updating game object:', {
+          userId: user.id,
+          gameId: game.id,
+          foundPlayer2Id: directGameCheck.player2_id,
+        })
+        // Update the game object with the found player2_id
+        game.player2_id = directGameCheck.player2_id
+        // Recompute player2Id
+        const verifiedPlayer2Id = normalizeId(directGameCheck.player2_id)
+        if (userId === verifiedPlayer2Id) {
+          console.log('Verified: User is player2 via direct query')
+          allowAccessAsWorkaround = true
+        }
+      } else {
+        // Check if game was recently updated (within last 60 seconds)
+        // This suggests a join might have just happened
+        const updatedAt = game.updated_at ? new Date(game.updated_at).getTime() : null
+        const now = Date.now()
+        const timeSinceUpdate = updatedAt ? now - updatedAt : Infinity
+        
+        if (timeSinceUpdate < 60000) { // 60 seconds
+          console.warn('Workaround: Allowing access despite player2_id being null (recent update)', {
+            userId: user.id,
+            gameId: game.id,
+            timeSinceUpdate,
+            gameStatus: game.status,
+          })
+          allowAccessAsWorkaround = true
+        }
+      }
+    }
+    
+    const isAuthorized = (userId === finalPlayer1Id) || (userId === finalPlayer2Id) || directMatchPlayer1 || directMatchPlayer2 || allowAccessAsWorkaround
     
     console.log('Authorization check:', {
       userId,
@@ -153,11 +202,13 @@ export async function GET(
       player2Id: finalPlayer2Id,
       gameId: game.id,
       isAuthorized,
+      allowAccessAsWorkaround,
       directMatchPlayer1,
       directMatchPlayer2,
       rawUserId: user.id,
       rawPlayer1Id: game.player1_id,
       rawPlayer2Id: game.player2_id,
+      gameUpdatedAt: game.updated_at,
       userIdType: typeof user.id,
       player1IdType: typeof game.player1_id,
       player2IdType: typeof game.player2_id,

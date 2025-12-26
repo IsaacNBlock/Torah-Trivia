@@ -53,6 +53,7 @@ export const supabase: SupabaseClient = (supabaseUrl && supabaseAnonKey)
 
 // Server-side client with service role key (for admin operations)
 // This function validates env vars when called (at runtime in API routes)
+// The service role key should bypass RLS, but we configure it explicitly
 export function createServerClient() {
   const supabaseUrl = getSupabaseUrl()
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -64,7 +65,23 @@ export function createServerClient() {
     )
   }
   
-  return createClient(supabaseUrl, serviceRoleKey)
+  // Create client with service role key
+  // Service role key should automatically bypass RLS, but we ensure it's configured correctly
+  const client = createClient(supabaseUrl, serviceRoleKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+    // Ensure we're using the service role key properly
+    global: {
+      headers: {
+        'apikey': serviceRoleKey,
+        'Authorization': `Bearer ${serviceRoleKey}`,
+      },
+    },
+  })
+  
+  return client
 }
 
 
