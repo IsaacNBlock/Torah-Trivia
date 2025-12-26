@@ -2,10 +2,8 @@
   "functions": {
     "app/api/stripe/webhook/route.ts": {
       "maxDuration": 10
-    },
-    "app/api/head-to-head/[gameId]/start/route.ts": {
-      "maxDuration": 60
     }
   }
 }
+
 

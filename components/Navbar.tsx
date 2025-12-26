@@ -2,41 +2,11 @@
 
 import Link from 'next/link'
 import { useAuth } from './AuthProvider'
-import { useState, useEffect } from 'react'
-import { authenticatedFetch } from '@/lib/api-client'
-import { Profile } from '@/lib/types'
+import { useState } from 'react'
 
 export function Navbar() {
   const { user, loading, signOut } = useAuth()
   const [showMenu, setShowMenu] = useState(false)
-  const [profile, setProfile] = useState<Profile | null>(null)
-  const [profileLoading, setProfileLoading] = useState(true)
-
-  // Fetch profile to check subscription status
-  useEffect(() => {
-    const fetchProfile = async () => {
-      if (!user) {
-        setProfileLoading(false)
-        return
-      }
-
-      try {
-        const response = await authenticatedFetch('/api/profile')
-        if (response.ok) {
-          const data = await response.json()
-          setProfile(data.profile)
-        }
-      } catch (err) {
-        console.error('Failed to fetch profile:', err)
-      } finally {
-        setProfileLoading(false)
-      }
-    }
-
-    fetchProfile()
-  }, [user])
-
-  const isPaidMember = profile?.plan === 'pro' && profile?.subscription_status === 'active'
 
   const handleSignOut = async () => {
     await signOut()
@@ -74,14 +44,6 @@ export function Navbar() {
                 >
                   Play
                 </Link>
-                {!profileLoading && isPaidMember && (
-                  <Link
-                    href="/head-to-head"
-                    className="text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
-                  >
-                    💎 Head-to-Head
-                  </Link>
-                )}
                 <Link
                   href="/profile"
                   className="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
@@ -135,6 +97,7 @@ export function Navbar() {
     </nav>
   )
 }
+
 
 
 
