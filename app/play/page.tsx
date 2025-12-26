@@ -58,6 +58,8 @@ export default function PlayPage() {
     const subcategoryToUse = subcategory !== undefined ? subcategory : selectedSubcategory
     setGameState('loading')
     setError(null)
+    setQuestion(null) // Clear question to show "Loading question..." instead of "Checking your answer..."
+    setQuestionId(null)
     setSelectedAnswer(null)
     setAnswerResult(null)
     setReviewSubmitted(false)
