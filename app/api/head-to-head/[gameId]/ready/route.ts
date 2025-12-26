@@ -170,6 +170,16 @@ export async function POST(
     })
 
     // Update ready status
+    console.log('Attempting to update ready status:', {
+      gameId,
+      updateField,
+      currentGameState: {
+        player1_ready: game.player1_ready,
+        player2_ready: game.player2_id ? game.player2_ready : 'N/A (player2_id is null)',
+        status: game.status,
+      }
+    })
+    
     const { data: updatedGame, error: updateError } = await supabase
       .from('head_to_head_games')
       .update({
@@ -179,13 +189,56 @@ export async function POST(
       .select()
       .single()
 
-    if (updateError || !updatedGame) {
-      console.error('Error updating ready status:', updateError)
+    console.log('Update result:', {
+      success: !!updatedGame && !updateError,
+      hasData: !!updatedGame,
+      hasError: !!updateError,
+      error: updateError,
+      updatedGame: updatedGame ? {
+        id: updatedGame.id,
+        player1_ready: updatedGame.player1_ready,
+        player2_ready: updatedGame.player2_ready,
+        status: updatedGame.status,
+      } : null,
+    })
+
+    if (updateError) {
+      console.error('Error updating ready status:', {
+        error: updateError,
+        code: updateError.code,
+        message: updateError.message,
+        details: updateError.details,
+        hint: updateError.hint,
+        gameId,
+        updateField,
+      })
       return NextResponse.json(
-        { error: 'Failed to update ready status' },
+        { 
+          error: 'Failed to update ready status',
+          details: updateError.message || updateError.code,
+        },
         { status: 500 }
       )
     }
+
+    if (!updatedGame) {
+      console.error('Update returned no data (possibly RLS policy blocking)', {
+        gameId,
+        updateField,
+        userId: user.id,
+      })
+      return NextResponse.json(
+        { error: 'Failed to update ready status - update returned no data' },
+        { status: 500 }
+      )
+    }
+
+    console.log('Successfully updated ready status:', {
+      gameId: updatedGame.id,
+      player1_ready: updatedGame.player1_ready,
+      player2_ready: updatedGame.player2_ready,
+      status: updatedGame.status,
+    })
 
     return NextResponse.json({ 
       success: true,
