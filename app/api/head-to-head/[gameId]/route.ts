@@ -75,50 +75,61 @@ export async function GET(
       }
       
       const player1Id = normalizeId(game.player1_id)
+      const isPlayer1 = userId === player1Id
       
-      // If user is player1, player2_id being null is expected - they're waiting for player2
-      if (userId === player1Id) {
-        console.log(`Attempt ${attempt + 1}: User is player1 (${user.id}), player2_id being null is expected`)
-        break
-      }
-      
-      // If player2_id is set, check if it matches the user
+      // If player2_id is set, we can proceed (for both player1 and player2)
       if (game.player2_id) {
-        const player2Id = normalizeId(game.player2_id)
-        if (userId === player2Id) {
-          console.log(`Attempt ${attempt + 1}: Game fetched successfully, player2_id matches user`)
+        if (isPlayer1) {
+          // Player1 can see the game once player2 has joined
+          console.log(`Attempt ${attempt + 1}: User is player1 (${user.id}), player2_id is set (${game.player2_id})`)
           break
         } else {
-          // player2_id is set but doesn't match - this user is not authorized
-          console.log(`Attempt ${attempt + 1}: player2_id is set (${game.player2_id}) but doesn't match user (${user.id})`)
-          break
+          // Check if player2_id matches the user
+          const player2Id = normalizeId(game.player2_id)
+          if (userId === player2Id) {
+            console.log(`Attempt ${attempt + 1}: Game fetched successfully, player2_id matches user`)
+            break
+          } else {
+            // player2_id is set but doesn't match - this user is not authorized
+            console.log(`Attempt ${attempt + 1}: player2_id is set (${game.player2_id}) but doesn't match user (${user.id})`)
+            break
+          }
         }
       }
       
-      // User is not player1 and player2_id is null - might be a race condition
-      // Check if game was recently created (within last 10 seconds) - might be a timing issue
+      // If we get here, player2_id is null
+      // If user is player1, this is expected initially, but we should still retry to see if player2 has joined
+      // If user is not player1, this might be a race condition
       const gameAge = game.created_at ? Date.now() - new Date(game.created_at).getTime() : Infinity
       const isRecentGame = gameAge < 10000 // Less than 10 seconds old
       
       if (attempt < maxRetries - 1) {
         const delay = baseDelay * (attempt + 1) // 500ms, 1000ms, 1500ms, 2000ms, 2500ms
-        console.log(`Attempt ${attempt + 1}: Game found but player2_id is null for user ${user.id}. Game age: ${gameAge}ms, isRecent: ${isRecentGame}. Retrying in ${delay}ms...`)
+        if (isPlayer1) {
+          console.log(`Attempt ${attempt + 1}: User is player1 (${user.id}), player2_id is null - retrying to check if player2 has joined...`)
+        } else {
+          console.log(`Attempt ${attempt + 1}: Game found but player2_id is null for user ${user.id}. Game age: ${gameAge}ms, isRecent: ${isRecentGame}. Retrying in ${delay}ms...`)
+        }
         await new Promise(resolve => setTimeout(resolve, delay))
       } else {
-        console.error(`Max retries (${maxRetries}) reached, player2_id still null:`, {
-          gameId: game.id,
-          userId: user.id,
-          player1Id: game.player1_id,
-          player2Id: game.player2_id,
-          gameAge: gameAge,
-          isRecentGame: isRecentGame,
-          attempts: maxRetries,
-        })
-        // If game is very recent (created < 5 seconds ago), allow access as a workaround
-        // This handles extreme race conditions
-        if (isRecentGame && gameAge < 5000) {
-          console.warn('Game is very recent (< 5s), allowing access despite player2_id being null (race condition workaround)')
-          // We'll still check authorization below, but this helps with logging
+        // On final attempt, if user is player1, it's okay if player2_id is still null (they're waiting)
+        if (isPlayer1) {
+          console.log(`Max retries reached: User is player1, player2_id still null (waiting for player2 to join)`)
+          break
+        } else {
+          console.error(`Max retries (${maxRetries}) reached, player2_id still null:`, {
+            gameId: game.id,
+            userId: user.id,
+            player1Id: game.player1_id,
+            player2Id: game.player2_id,
+            gameAge: gameAge,
+            isRecentGame: isRecentGame,
+            attempts: maxRetries,
+          })
+          // If game is very recent (created < 5 seconds ago), allow access as a workaround
+          if (isRecentGame && gameAge < 5000) {
+            console.warn('Game is very recent (< 5s), allowing access despite player2_id being null (race condition workaround)')
+          }
         }
       }
     }

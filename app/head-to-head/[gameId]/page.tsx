@@ -96,20 +96,36 @@ export default function HeadToHeadGamePage() {
         method: 'POST',
       })
 
+      console.log('Ready response received:', { 
+        ok: response.ok, 
+        status: response.status, 
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries())
+      })
+      
       const data = await response.json()
       
-      console.log('Ready response:', { ok: response.ok, status: response.status, data })
+      console.log('Ready response data:', data)
       
       if (!response.ok) {
-        console.error('Failed to mark ready:', data)
-        throw new Error(data.error || 'Failed to mark ready')
+        console.error('Failed to mark ready:', { status: response.status, data })
+        const errorMessage = data.error || `Failed to mark ready (status: ${response.status})`
+        setError(errorMessage)
+        alert('Error: ' + errorMessage)
+        return
       }
 
       console.log('Successfully marked ready:', data)
+      
+      // Refresh game state after marking ready
+      console.log('Refreshing game state...')
       await fetchGameState()
+      console.log('Game state refreshed')
     } catch (err: any) {
       console.error('Error marking ready:', err)
-      setError(err.message || 'Failed to mark ready')
+      const errorMessage = err.message || 'Failed to mark ready'
+      setError(errorMessage)
+      alert('Error: ' + errorMessage)
     }
   }
 
