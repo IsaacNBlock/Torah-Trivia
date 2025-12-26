@@ -34,7 +34,14 @@ export default function HeadToHeadGamePage() {
       const data: GameStateResponse = await response.json()
 
       if (!response.ok || data.error) {
-        throw new Error(data.error || 'Failed to fetch game state')
+        // Include debug info in error message if available
+        const errorMessage = data.error || 'Failed to fetch game state'
+        const debugInfo = (data as any).debug
+        if (debugInfo) {
+          console.error('Game fetch error with debug info:', debugInfo)
+          throw new Error(`${errorMessage} (Debug: ${JSON.stringify(debugInfo)})`)
+        }
+        throw new Error(errorMessage)
       }
 
       setGame(data.game)
@@ -555,4 +562,5 @@ export default function HeadToHeadGamePage() {
     </ProtectedRoute>
   )
 }
+
 
