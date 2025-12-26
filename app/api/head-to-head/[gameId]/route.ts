@@ -30,17 +30,30 @@ export async function GET(
       .single()
 
     if (gameError || !game) {
+      console.error('Game fetch error:', gameError)
       return NextResponse.json(
         { error: 'Game not found' },
         { status: 404 }
       )
     }
 
+    console.log('Fetched game from DB:', {
+      gameId: game.id,
+      player1_id: game.player1_id,
+      player2_id: game.player2_id,
+      status: game.status,
+    })
+
     // Verify user is a player in this game
-    // Convert to strings for comparison to handle UUID type differences
-    const userId = String(user.id).trim()
-    const player1Id = game.player1_id ? String(game.player1_id).trim() : null
-    const player2Id = game.player2_id ? String(game.player2_id).trim() : null
+    // Normalize UUIDs for comparison (handle case differences and whitespace)
+    const normalizeId = (id: any): string | null => {
+      if (!id) return null
+      return String(id).trim().toLowerCase()
+    }
+    
+    const userId = normalizeId(user.id)
+    const player1Id = normalizeId(game.player1_id)
+    const player2Id = normalizeId(game.player2_id)
     
     console.log('Authorization check:', {
       userId,
@@ -49,6 +62,9 @@ export async function GET(
       gameId: game.id,
       userMatchesPlayer1: userId === player1Id,
       userMatchesPlayer2: userId === player2Id,
+      rawUserId: user.id,
+      rawPlayer1Id: game.player1_id,
+      rawPlayer2Id: game.player2_id,
     })
     
     if (userId !== player1Id && userId !== player2Id) {
@@ -60,9 +76,22 @@ export async function GET(
         userIdType: typeof user.id,
         player1IdType: typeof game.player1_id,
         player2IdType: typeof game.player2_id,
+        rawUserId: user.id,
+        rawPlayer1Id: game.player1_id,
+        rawPlayer2Id: game.player2_id,
       })
       return NextResponse.json(
-        { error: 'Unauthorized - you are not a player in this game' },
+        { 
+          error: 'Unauthorized - you are not a player in this game',
+          debug: process.env.NODE_ENV === 'development' ? {
+            userId,
+            player1Id,
+            player2Id,
+            rawUserId: user.id,
+            rawPlayer1Id: game.player1_id,
+            rawPlayer2Id: game.player2_id,
+          } : undefined
+        },
         { status: 403 }
       )
     }

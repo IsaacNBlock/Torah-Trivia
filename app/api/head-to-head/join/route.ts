@@ -72,8 +72,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Normalize UUIDs for comparison (handle case differences and whitespace)
+    const normalizeId = (id: any): string => String(id).trim().toLowerCase()
+
     // Check if user is trying to join their own game
-    if (String(game.player1_id).trim() === String(user.id).trim()) {
+    if (normalizeId(game.player1_id) === normalizeId(user.id)) {
       return NextResponse.json(
         { error: 'You cannot join your own game.' },
         { status: 400 }
@@ -124,13 +127,15 @@ export async function POST(request: NextRequest) {
     })
 
     // Verify the update persisted correctly
-    if (String(updatedGame.player2_id).trim() !== String(user.id).trim()) {
+    if (normalizeId(updatedGame.player2_id) !== normalizeId(user.id)) {
       console.error('Join verification failed:', {
         expectedUserId: user.id,
         expectedUserIdType: typeof user.id,
         actualPlayer2Id: updatedGame.player2_id,
         actualPlayer2IdType: typeof updatedGame.player2_id,
         gameId: game.id,
+        normalizedExpected: normalizeId(user.id),
+        normalizedActual: normalizeId(updatedGame.player2_id),
       })
       return NextResponse.json(
         { error: 'Failed to join game - verification failed' },

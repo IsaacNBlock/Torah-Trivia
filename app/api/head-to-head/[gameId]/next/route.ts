@@ -37,10 +37,15 @@ export async function POST(
     }
 
     // Verify user is a player in this game
-    // Convert to strings for comparison to handle UUID type differences
-    const userId = String(user.id)
-    const player1Id = game.player1_id ? String(game.player1_id) : null
-    const player2Id = game.player2_id ? String(game.player2_id) : null
+    // Normalize UUIDs for comparison (handle case differences and whitespace)
+    const normalizeId = (id: any): string | null => {
+      if (!id) return null
+      return String(id).trim().toLowerCase()
+    }
+    
+    const userId = normalizeId(user.id)
+    const player1Id = normalizeId(game.player1_id)
+    const player2Id = normalizeId(game.player2_id)
     
     if (userId !== player1Id && userId !== player2Id) {
       console.error('Authorization failed:', {
