@@ -37,7 +37,18 @@ export async function GET(
     }
 
     // Verify user is a player in this game
-    if (game.player1_id !== user.id && game.player2_id !== user.id) {
+    // Convert to strings for comparison to handle UUID type differences
+    const userId = String(user.id)
+    const player1Id = game.player1_id ? String(game.player1_id) : null
+    const player2Id = game.player2_id ? String(game.player2_id) : null
+    
+    if (userId !== player1Id && userId !== player2Id) {
+      console.error('Authorization failed:', {
+        userId,
+        player1Id,
+        player2Id,
+        gameId: game.id,
+      })
       return NextResponse.json(
         { error: 'Unauthorized - you are not a player in this game' },
         { status: 403 }
@@ -118,4 +129,5 @@ export async function GET(
     )
   }
 }
+
 

@@ -106,6 +106,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Verify the update persisted correctly
+    if (String(updatedGame.player2_id) !== String(user.id)) {
+      console.error('Join verification failed:', {
+        expectedUserId: user.id,
+        actualPlayer2Id: updatedGame.player2_id,
+        gameId: game.id,
+      })
+      return NextResponse.json(
+        { error: 'Failed to join game - verification failed' },
+        { status: 500 }
+      )
+    }
+
     const response: JoinGameResponse = {
       game: updatedGame,
     }
@@ -119,4 +132,5 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
 
