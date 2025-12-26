@@ -22,17 +22,20 @@ export async function authenticatedFetch(url: string, options: RequestInit = {})
   }
 
   // Add cache-busting and prevent caching
+  // Use multiple cache prevention strategies
   const fetchOptions: RequestInit = {
     ...options,
     headers,
     cache: 'no-store', // Prevent browser caching
+    // Add additional cache prevention
+    credentials: 'same-origin',
   }
 
-  // Add cache-busting query parameter to GET requests
+  // Add cache-busting query parameter to GET requests with random component
   if (!options.method || options.method === 'GET') {
-    // Add timestamp to prevent caching
+    // Add timestamp + random number to prevent any caching
     const separator = url.includes('?') ? '&' : '?'
-    const cacheBustUrl = `${url}${separator}_t=${Date.now()}`
+    const cacheBustUrl = `${url}${separator}_t=${Date.now()}&_r=${Math.random()}`
     return fetch(cacheBustUrl, fetchOptions)
   }
 

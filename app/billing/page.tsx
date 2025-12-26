@@ -44,11 +44,14 @@ function BillingContent() {
       if (response.ok && data.success) {
         // Refresh profile after successful sync
         await fetchProfile()
+        return true // Return success
       }
+      return false // Return failure
       // Silently ignore if no subscription found - this is normal for free users
     } catch (error: any) {
       // Silently ignore errors during auto-sync - don't show to user
       console.error('Auto-sync with Stripe failed:', error)
+      return false
     }
   }, [fetchProfile])
 
@@ -62,15 +65,38 @@ function BillingContent() {
 
   useEffect(() => {
     if (success) {
-      // Refresh profile after successful payment and sync
-      setTimeout(() => {
-        autoSyncWithStripe().then(() => {
-          fetchProfile()
-          router.replace('/billing')
-        })
-      }, 1000)
+      // Immediately sync with Stripe after successful payment
+      // Use multiple attempts with delays to handle webhook processing time
+      const syncAndRefresh = async () => {
+        // First attempt immediately
+        let synced = await autoSyncWithStripe()
+        if (synced) {
+          await fetchProfile()
+          return // Success, no need for more attempts
+        }
+        
+        // Second attempt after 2 seconds (in case webhook is still processing)
+        setTimeout(async () => {
+          synced = await autoSyncWithStripe()
+          if (synced) {
+            await fetchProfile()
+            return
+          }
+          
+          // Third attempt after 5 seconds (final fallback)
+          setTimeout(async () => {
+            await autoSyncWithStripe()
+            await fetchProfile()
+          }, 3000) // 3 more seconds = 5 total
+        }, 2000)
+      }
+      
+      syncAndRefresh()
+      // Clean URL but keep success state in component
+      router.replace('/billing')
     }
-  }, [success, autoSyncWithStripe, fetchProfile, router])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [success]) // Only depend on success to avoid re-running unnecessarily
 
   const handleUpgrade = async () => {
     setCheckoutLoading(true)

@@ -38,13 +38,33 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (user) {
+      // Fetch immediately on mount
       fetchProfileData()
-      // Refresh profile data periodically (every 30 seconds) to catch subscription updates
+      
+      // Refresh profile data periodically (every 10 seconds) to catch subscription updates
       const interval = setInterval(() => {
         fetchProfileData()
-      }, 30000)
+      }, 10000) // Reduced from 30s to 10s for faster updates
 
-      return () => clearInterval(interval)
+      // Refresh when page becomes visible (user switches back to tab)
+      const handleVisibilityChange = () => {
+        if (!document.hidden) {
+          fetchProfileData()
+        }
+      }
+      document.addEventListener('visibilitychange', handleVisibilityChange)
+
+      // Refresh when window gains focus
+      const handleFocus = () => {
+        fetchProfileData()
+      }
+      window.addEventListener('focus', handleFocus)
+
+      return () => {
+        clearInterval(interval)
+        document.removeEventListener('visibilitychange', handleVisibilityChange)
+        window.removeEventListener('focus', handleFocus)
+      }
     }
   }, [user])
 

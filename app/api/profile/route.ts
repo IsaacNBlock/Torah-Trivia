@@ -3,6 +3,7 @@ import { createServerClient } from '@/lib/supabase'
 import { getUserFromApiRequest } from '@/lib/server-auth'
 
 export const dynamic = 'force-dynamic'
+export const revalidate = 0 // Prevent any caching at Next.js level
 
 export async function GET(request: NextRequest) {
   const cacheHeaders = {
